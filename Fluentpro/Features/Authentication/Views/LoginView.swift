@@ -116,7 +116,9 @@ struct LoginView: View {
                 }
             }
             .onChange(of: viewModel.isLoggedIn) { _, isLoggedIn in
+                print("🔍 isLoggedIn changed to: \(isLoggedIn)")
                 if isLoggedIn {
+                    print("🚀 Calling handleSuccessfulLogin()")
                     navigationCoordinator.handleSuccessfulLogin()
                 }
             }

@@ -26,12 +26,15 @@ class NavigationCoordinator: ObservableObject {
     
     // MARK: - Navigation Methods
     func navigateTo(_ view: AppView) {
+        print("🧭 navigateTo called with view: \(view)")
         withAnimation(.easeInOut(duration: 0.3)) {
             currentView = view
+            print("✅ currentView set to: \(currentView)")
         }
     }
     
     func navigateToHome() {
+        print("📱 navigateToHome called - clearing path and setting currentView to .home")
         navigationPath.removeLast(navigationPath.count)
         navigateTo(.home)
     }
@@ -51,6 +54,7 @@ class NavigationCoordinator: ObservableObject {
     
     // MARK: - Authentication Methods
     func handleSuccessfulLogin() {
+        print("🏠 handleSuccessfulLogin called - navigating to home")
         navigateToHome()
     }
     

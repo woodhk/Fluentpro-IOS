@@ -34,13 +34,22 @@ class LoginViewModel: ObservableObject {
         // Perform login
         Task {
             do {
-                _ = try await authenticationService.login(email: email, password: password)
-                isLoggedIn = true
-                clearForm()
+                let user = try await authenticationService.login(email: email, password: password)
+                print("🎉 Login successful for user: \(user.email)")
+                await MainActor.run {
+                    print("🔄 Setting isLoggedIn = true")
+                    isLoggedIn = true
+                    clearForm()
+                }
             } catch {
-                errorMessage = handleError(error)
+                print("❌ Login failed: \(error)")
+                await MainActor.run {
+                    errorMessage = handleError(error)
+                }
             }
-            isLoading = false
+            await MainActor.run {
+                isLoading = false
+            }
         }
     }
     

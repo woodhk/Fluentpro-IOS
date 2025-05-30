@@ -9,8 +9,8 @@ import Foundation
 
 enum APIEndpoints {
     // MARK: - Base Configuration
-    private static let baseURL = "https://api.fluentpro.com" // Replace with your actual base URL
-    private static let apiVersion = "v1"
+    private static let baseURL = "https://fluentpro-backend.onrender.com" // Replace with your actual base URL
+    private static let apiVersion = "api/v1"
     
     // MARK: - Authentication Endpoints
     case login
@@ -33,21 +33,21 @@ enum APIEndpoints {
         switch self {
         // Authentication
         case .login:
-            return "/auth/login"
+            return "/auth/login/"
         case .signup:
-            return "/auth/signup"
+            return "/auth/signup/"
         case .refreshToken:
-            return "/auth/refresh"
+            return "/auth/refresh/"
         case .logout:
-            return "/auth/logout"
+            return "/auth/logout/"
         case .auth0Callback:
             return "/auth/auth0/callback"
             
         // User
         case .userProfile:
-            return "/user/profile"
+            return "/auth/profile/"
         case .updateProfile:
-            return "/user/profile/update"
+            return "/auth/profile/"
             
         // Other endpoints
         case .lessons:

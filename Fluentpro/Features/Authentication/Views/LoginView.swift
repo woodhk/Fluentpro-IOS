@@ -1,11 +1,9 @@
 import SwiftUI
 
 struct LoginView: View {
-    @State private var email = ""
-    @State private var password = ""
-    @State private var isLoading = false
-    @State private var errorMessage: String?
-    @State private var showSignUp = false
+    @StateObject private var viewModel = LoginViewModel()
+    @EnvironmentObject var navigationCoordinator: NavigationCoordinator
+    @EnvironmentObject var authService: AuthenticationService
     
     var body: some View {
         NavigationStack {
@@ -39,7 +37,7 @@ struct LoginView: View {
                                     .fontWeight(.medium)
                                     .foregroundColor(.theme.secondaryText)
                                 
-                                TextField("Enter your email", text: $email)
+                                TextField("Enter your email", text: $viewModel.email)
                                     .textFieldStyle(RoundedBorderTextFieldStyle())
                                     .keyboardType(.emailAddress)
                                     .textInputAutocapitalization(.never)
@@ -53,15 +51,15 @@ struct LoginView: View {
                                     .fontWeight(.medium)
                                     .foregroundColor(.theme.secondaryText)
                                 
-                                SecureField("Enter your password", text: $password)
+                                SecureField("Enter your password", text: $viewModel.password)
                                     .textFieldStyle(RoundedBorderTextFieldStyle())
                             }
                         }
                         .padding(.horizontal)
                         
                         // Error Message
-                        if let errorMessage = errorMessage {
-                            Text(errorMessage)
+                        if !viewModel.errorMessage.isEmpty {
+                            Text(viewModel.errorMessage)
                                 .font(.caption)
                                 .foregroundColor(.theme.error)
                                 .padding(.horizontal)
@@ -69,9 +67,11 @@ struct LoginView: View {
                         }
                         
                         // Login Button
-                        Button(action: handleLogin) {
+                        Button(action: {
+                            viewModel.login()
+                        }) {
                             HStack {
-                                if isLoading {
+                                if viewModel.isLoading {
                                     ProgressView()
                                         .progressViewStyle(CircularProgressViewStyle(tint: .white))
                                         .scaleEffect(0.8)
@@ -86,8 +86,8 @@ struct LoginView: View {
                             .foregroundColor(.white)
                             .cornerRadius(12)
                         }
-                        .disabled(isLoading || email.isEmpty || password.isEmpty)
-                        .opacity((isLoading || email.isEmpty || password.isEmpty) ? 0.6 : 1.0)
+                        .disabled(viewModel.isLoading || viewModel.email.isEmpty || viewModel.password.isEmpty)
+                        .opacity((viewModel.isLoading || viewModel.email.isEmpty || viewModel.password.isEmpty) ? 0.6 : 1.0)
                         .padding(.horizontal)
                         .padding(.top, 8)
                         
@@ -97,7 +97,7 @@ struct LoginView: View {
                                 .foregroundColor(.theme.secondaryText)
                             
                             Button("Sign Up") {
-                                showSignUp = true
+                                navigationCoordinator.navigateToSignUp()
                             }
                             .foregroundColor(Color(hex: "#234BFF"))
                             .fontWeight(.medium)
@@ -109,43 +109,32 @@ struct LoginView: View {
                 }
                 
                 // Loading Overlay
-                if isLoading {
+                if viewModel.isLoading {
                     Color.black.opacity(0.3)
                         .ignoresSafeArea()
                         .allowsHitTesting(true)
                 }
             }
-            .navigationDestination(isPresented: $showSignUp) {
-                SignUpView()
+            .onChange(of: viewModel.isLoggedIn) { _, isLoggedIn in
+                if isLoggedIn {
+                    navigationCoordinator.handleSuccessfulLogin()
+                }
             }
-        }
-    }
-    
-    private func handleLogin() {
-        // Hide keyboard
-        UIApplication.shared.sendAction(#selector(UIResponder.resignFirstResponder), to: nil, from: nil, for: nil)
-        
-        // Validate inputs
-        guard !email.isEmpty, !password.isEmpty else {
-            errorMessage = "Please fill in all fields"
-            return
-        }
-        
-        // Simple email validation
-        guard email.contains("@") && email.contains(".") else {
-            errorMessage = "Please enter a valid email address"
-            return
-        }
-        
-        isLoading = true
-        errorMessage = nil
-        
-        // Simulate login - Replace with actual authentication
-        DispatchQueue.main.asyncAfter(deadline: .now() + 2) {
-            isLoading = false
-            // Handle login success/failure
-            // For now, just show an error
-            errorMessage = "Login functionality not implemented yet"
+            .onChange(of: viewModel.promptSignUp) { _, shouldPrompt in
+                if shouldPrompt {
+                    navigationCoordinator.navigateToSignUp()
+                }
+            }
+            .alert("No Account Found", isPresented: $viewModel.promptSignUp) {
+                Button("Sign Up") {
+                    navigationCoordinator.navigateToSignUp()
+                }
+                Button("Cancel", role: .cancel) {
+                    // Do nothing
+                }
+            } message: {
+                Text("It looks like you don't have an account yet. Would you like to sign up?")
+            }
         }
     }
 }
@@ -166,4 +155,6 @@ struct RoundedBorderTextFieldStyle: TextFieldStyle {
 
 #Preview {
     LoginView()
+        .environmentObject(NavigationCoordinator())
+        .environmentObject(AuthenticationService.shared)
 }

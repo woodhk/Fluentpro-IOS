@@ -47,7 +47,7 @@ class SignUpViewModel: ObservableObject {
         // Perform sign up
         Task {
             do {
-                let _ = try await authenticationService.signUp(
+                _ = try await authenticationService.signUp(
                     fullName: fullName,
                     email: email,
                     password: password,

@@ -1,5 +1,6 @@
 import Foundation
 import SwiftUI
+import Combine
 
 enum AppView {
     case onboarding
@@ -13,16 +14,14 @@ enum AppView {
 class NavigationCoordinator: ObservableObject {
     // MARK: - Published Properties
     @Published var currentView: AppView = .login
-    @Published var isAuthenticated: Bool = false
-    @Published var currentUser: User?
     @Published var navigationPath = NavigationPath()
     
     // MARK: - Private Properties
-    private var authToken: AuthToken?
+    private let authService = AuthenticationService.shared
     
     // MARK: - Initialization
     init() {
-        checkAuthenticationStatus()
+        setupAuthenticationObserver()
     }
     
     // MARK: - Navigation Methods
@@ -51,79 +50,36 @@ class NavigationCoordinator: ObservableObject {
     }
     
     // MARK: - Authentication Methods
-    func login(user: User, token: AuthToken) {
-        self.currentUser = user
-        self.authToken = token
-        self.isAuthenticated = true
-        saveAuthenticationData(user: user, token: token)
+    func handleSuccessfulLogin() {
         navigateToHome()
     }
     
-    func logout() {
-        self.currentUser = nil
-        self.authToken = nil
-        self.isAuthenticated = false
-        clearAuthenticationData()
+    func handleSuccessfulSignUp() {
+        navigateToOnboarding()
+    }
+    
+    func handleLogout() {
         navigateToLogin()
     }
     
-    func updateUser(_ user: User) {
-        self.currentUser = user
-        if let token = authToken {
-            saveAuthenticationData(user: user, token: token)
-        }
-    }
-    
     // MARK: - Private Methods
-    private func checkAuthenticationStatus() {
-        // Check if user is already logged in (e.g., from UserDefaults or Keychain)
-        if let userData = UserDefaults.standard.data(forKey: "currentUser"),
-           let tokenData = UserDefaults.standard.data(forKey: "authToken") {
-            do {
-                let decoder = JSONDecoder()
-                decoder.dateDecodingStrategy = .iso8601
-                
-                let user = try decoder.decode(User.self, from: userData)
-                let token = try decoder.decode(AuthToken.self, from: tokenData)
-                
-                // Check if token is still valid
-                if token.expiresAt > Date() {
-                    self.currentUser = user
-                    self.authToken = token
-                    self.isAuthenticated = true
-                    self.currentView = .home
+    private func setupAuthenticationObserver() {
+        // Observe authentication state changes
+        authService.$currentUser
+            .receive(on: DispatchQueue.main)
+            .sink { [weak self] user in
+                if user != nil {
+                    // User is authenticated, stay on current view or go to home
+                    if self?.currentView == .login || self?.currentView == .signUp {
+                        // Don't auto-navigate, let the view models handle it
+                    }
                 } else {
-                    // Token expired, clear data and go to login
-                    clearAuthenticationData()
-                    self.currentView = .login
+                    // User is not authenticated
+                    self?.currentView = .login
                 }
-            } catch {
-                print("Error decoding authentication data: \(error)")
-                self.currentView = .onboarding
             }
-        } else {
-            // No authentication data found, show onboarding
-            self.currentView = .onboarding
-        }
+            .store(in: &cancellables)
     }
     
-    private func saveAuthenticationData(user: User, token: AuthToken) {
-        do {
-            let encoder = JSONEncoder()
-            encoder.dateEncodingStrategy = .iso8601
-            
-            let userData = try encoder.encode(user)
-            let tokenData = try encoder.encode(token)
-            
-            UserDefaults.standard.set(userData, forKey: "currentUser")
-            UserDefaults.standard.set(tokenData, forKey: "authToken")
-        } catch {
-            print("Error saving authentication data: \(error)")
-        }
-    }
-    
-    private func clearAuthenticationData() {
-        UserDefaults.standard.removeObject(forKey: "currentUser")
-        UserDefaults.standard.removeObject(forKey: "authToken")
-    }
+    private var cancellables = Set<AnyCancellable>()
 }

@@ -9,6 +9,7 @@ class LoginViewModel: ObservableObject {
     @Published var errorMessage: String = ""
     @Published var isLoading: Bool = false
     @Published var isLoggedIn: Bool = false
+    @Published var promptSignUp: Bool = false
     
     // MARK: - Private Properties
     private let authenticationService: AuthenticationService
@@ -33,7 +34,7 @@ class LoginViewModel: ObservableObject {
         // Perform login
         Task {
             do {
-                let _ = try await authenticationService.login(email: email, password: password)
+                _ = try await authenticationService.login(email: email, password: password)
                 isLoggedIn = true
                 clearForm()
             } catch {
@@ -79,6 +80,15 @@ class LoginViewModel: ObservableObject {
     private func handleError(_ error: Error) -> String {
         // Handle specific authentication errors
         if let authError = error as? AuthenticationError {
+            switch authError {
+            case .userNotFound:
+                // Set a flag to prompt sign up
+                DispatchQueue.main.asyncAfter(deadline: .now() + 1.5) {
+                    self.promptSignUp = true
+                }
+            default:
+                break
+            }
             return authError.localizedDescription
         }
         

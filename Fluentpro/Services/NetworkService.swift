@@ -62,12 +62,10 @@ class NetworkService {
         self.session = URLSession(configuration: configuration)
         
         self.decoder = JSONDecoder()
-        self.decoder.keyDecodingStrategy = .convertFromSnakeCase
-        self.decoder.dateDecodingStrategy = .iso8601
+        // Note: Using manual CodingKeys for field mapping instead of automatic conversion
         
         self.encoder = JSONEncoder()
-        self.encoder.keyEncodingStrategy = .convertToSnakeCase
-        self.encoder.dateEncodingStrategy = .iso8601
+        // Note: Using manual CodingKeys for field mapping instead of automatic conversion
     }
     
     // MARK: - Token Management
@@ -98,12 +96,30 @@ class NetworkService {
         
         // Set headers
         var headers = endpoint.headers
-        if let token = authToken {
+        
+        // Only add auth token for endpoints that require authentication
+        let requiresAuth: Bool
+        switch endpoint {
+        case .login, .signup, .auth0Callback:
+            requiresAuth = false
+        default:
+            requiresAuth = true
+        }
+        
+        if requiresAuth, let token = authToken {
             headers["Authorization"] = "Bearer \(token)"
         }
         
+        // Debug: Print request details
+        print("🚀 Making request to: \(request.url?.absoluteString ?? "unknown")")
+        print("📋 Method: \(request.httpMethod ?? "unknown")")
+        print("📋 Headers:")
         for (key, value) in headers {
+            print("   \(key): \(value)")
             request.setValue(value, forHTTPHeaderField: key)
+        }
+        if let body = body, let bodyString = String(data: body, encoding: .utf8) {
+            print("📋 Request body: \(bodyString)")
         }
         
         // Set body
@@ -116,6 +132,12 @@ class NetworkService {
                 throw NetworkError.networkError(NSError(domain: "Invalid response", code: -1))
             }
             
+            // Debug: Always log the status code and response for debugging
+            print("🌐 HTTP \(httpResponse.statusCode) - \(request.url?.absoluteString ?? "unknown URL")")
+            if let responseString = String(data: data, encoding: .utf8) {
+                print("📄 Response: \(responseString)")
+            }
+            
             // Handle HTTP status codes
             switch httpResponse.statusCode {
             case 200...299:
@@ -123,10 +145,23 @@ class NetworkService {
                 break
             case 401:
                 throw NetworkError.unauthorized
+            case 403:
+                // Handle forbidden errors specifically
+                if let errorResponse = try? decoder.decode(ErrorResponse.self, from: data) {
+                    let message = errorResponse.message ?? errorResponse.error ?? errorResponse.detail ?? "Access forbidden"
+                    throw NetworkError.serverError(message: "Forbidden: \(message)")
+                }
+                // Debug: Print raw 403 response
+                if let responseString = String(data: data, encoding: .utf8) {
+                    print("🔍 403 Forbidden response:")
+                    print(responseString)
+                }
+                throw NetworkError.serverError(message: "Access forbidden")
             case 400...499:
                 // Try to decode error message from server
                 if let errorResponse = try? decoder.decode(ErrorResponse.self, from: data) {
-                    throw NetworkError.serverError(message: errorResponse.message)
+                    let message = errorResponse.message ?? errorResponse.error ?? errorResponse.detail ?? "Request failed"
+                    throw NetworkError.serverError(message: message)
                 }
                 throw NetworkError.httpError(statusCode: httpResponse.statusCode, data: data)
             case 500...599:
@@ -140,6 +175,11 @@ class NetworkService {
                 let decodedResponse = try decoder.decode(responseType, from: data)
                 return decodedResponse
             } catch {
+                // Debug: Print response for 4xx/5xx errors
+                if let responseString = String(data: data, encoding: .utf8) {
+                    print("🔍 Failed to decode response. Raw response:")
+                    print(responseString)
+                }
                 throw NetworkError.decodingError(error)
             }
             
@@ -231,12 +271,14 @@ class NetworkService {
             throw NetworkError.httpError(statusCode: httpResponse.statusCode, data: nil)
         }
     }
-}
-
-// MARK: - Response Models
-struct ErrorResponse: Decodable {
-    let message: String
-    let code: String?
+    
+    // MARK: - Response Models
+    struct ErrorResponse: Decodable {
+        let message: String?
+        let code: String?
+        let error: String?
+        let detail: String?
+    }
 }
 
 struct EmptyResponse: Decodable {}

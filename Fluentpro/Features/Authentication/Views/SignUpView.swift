@@ -1,21 +1,10 @@
 import SwiftUI
 
 struct SignUpView: View {
-    @State private var fullName = ""
-    @State private var email = ""
-    @State private var password = ""
-    @State private var confirmPassword = ""
-    @State private var dateOfBirth = Date()
-    @State private var isLoading = false
+    @StateObject private var viewModel = SignUpViewModel()
+    @EnvironmentObject var navigationCoordinator: NavigationCoordinator
+    @EnvironmentObject var authService: AuthenticationService
     @State private var showDatePicker = false
-    
-    // Validation errors
-    @State private var fullNameError: String?
-    @State private var emailError: String?
-    @State private var passwordError: String?
-    @State private var confirmPasswordError: String?
-    @State private var dateOfBirthError: String?
-    
     @Environment(\.dismiss) private var dismiss
     
     private let dateFormatter: DateFormatter = {
@@ -55,14 +44,11 @@ struct SignUpView: View {
                                 .fontWeight(.medium)
                                 .foregroundColor(.theme.secondaryText)
                             
-                            TextField("Enter your full name", text: $fullName)
+                            TextField("Enter your full name", text: $viewModel.fullName)
                                 .textFieldStyle(RoundedBorderTextFieldStyle())
-                                .onChange(of: fullName) { _, _ in
-                                    validateFullName()
-                                }
                             
-                            if let error = fullNameError {
-                                Text(error)
+                            if !viewModel.fullNameError.isEmpty {
+                                Text(viewModel.fullNameError)
                                     .font(.caption)
                                     .foregroundColor(.theme.error)
                             }
@@ -75,17 +61,14 @@ struct SignUpView: View {
                                 .fontWeight(.medium)
                                 .foregroundColor(.theme.secondaryText)
                             
-                            TextField("Enter your email", text: $email)
+                            TextField("Enter your email", text: $viewModel.email)
                                 .textFieldStyle(RoundedBorderTextFieldStyle())
                                 .keyboardType(.emailAddress)
                                 .textInputAutocapitalization(.never)
                                 .autocorrectionDisabled()
-                                .onChange(of: email) { _, _ in
-                                    validateEmail()
-                                }
                             
-                            if let error = emailError {
-                                Text(error)
+                            if !viewModel.emailError.isEmpty {
+                                Text(viewModel.emailError)
                                     .font(.caption)
                                     .foregroundColor(.theme.error)
                             }
@@ -98,15 +81,11 @@ struct SignUpView: View {
                                 .fontWeight(.medium)
                                 .foregroundColor(.theme.secondaryText)
                             
-                            SecureField("Create a password", text: $password)
+                            SecureField("Create a password", text: $viewModel.password)
                                 .textFieldStyle(RoundedBorderTextFieldStyle())
-                                .onChange(of: password) { _, _ in
-                                    validatePassword()
-                                    validateConfirmPassword()
-                                }
                             
-                            if let error = passwordError {
-                                Text(error)
+                            if !viewModel.passwordError.isEmpty {
+                                Text(viewModel.passwordError)
                                     .font(.caption)
                                     .foregroundColor(.theme.error)
                             }
@@ -119,14 +98,11 @@ struct SignUpView: View {
                                 .fontWeight(.medium)
                                 .foregroundColor(.theme.secondaryText)
                             
-                            SecureField("Confirm your password", text: $confirmPassword)
+                            SecureField("Confirm your password", text: $viewModel.confirmPassword)
                                 .textFieldStyle(RoundedBorderTextFieldStyle())
-                                .onChange(of: confirmPassword) { _, _ in
-                                    validateConfirmPassword()
-                                }
                             
-                            if let error = confirmPasswordError {
-                                Text(error)
+                            if !viewModel.confirmPasswordError.isEmpty {
+                                Text(viewModel.confirmPasswordError)
                                     .font(.caption)
                                     .foregroundColor(.theme.error)
                             }
@@ -143,7 +119,7 @@ struct SignUpView: View {
                                 showDatePicker.toggle()
                             }) {
                                 HStack {
-                                    Text(dateFormatter.string(from: dateOfBirth))
+                                    Text(dateFormatter.string(from: viewModel.dateOfBirth))
                                         .foregroundColor(.theme.primaryText)
                                     Spacer()
                                     Image(systemName: "calendar")
@@ -158,8 +134,8 @@ struct SignUpView: View {
                                 )
                             }
                             
-                            if let error = dateOfBirthError {
-                                Text(error)
+                            if !viewModel.dateOfBirthError.isEmpty {
+                                Text(viewModel.dateOfBirthError)
                                     .font(.caption)
                                     .foregroundColor(.theme.error)
                             }
@@ -167,10 +143,21 @@ struct SignUpView: View {
                     }
                     .padding(.horizontal)
                     
+                    // Error Message
+                    if !viewModel.errorMessage.isEmpty {
+                        Text(viewModel.errorMessage)
+                            .font(.caption)
+                            .foregroundColor(.theme.error)
+                            .padding(.horizontal)
+                            .multilineTextAlignment(.center)
+                    }
+                    
                     // Sign Up Button
-                    Button(action: handleSignUp) {
+                    Button(action: {
+                        viewModel.signUp()
+                    }) {
                         HStack {
-                            if isLoading {
+                            if viewModel.isLoading {
                                 ProgressView()
                                     .progressViewStyle(CircularProgressViewStyle(tint: .white))
                                     .scaleEffect(0.8)
@@ -185,8 +172,8 @@ struct SignUpView: View {
                         .foregroundColor(.white)
                         .cornerRadius(12)
                     }
-                    .disabled(isLoading || !isFormValid)
-                    .opacity((isLoading || !isFormValid) ? 0.6 : 1.0)
+                    .disabled(viewModel.isLoading || !isFormValid)
+                    .opacity((viewModel.isLoading || !isFormValid) ? 0.6 : 1.0)
                     .padding(.horizontal)
                     .padding(.top, 8)
                     
@@ -196,7 +183,7 @@ struct SignUpView: View {
                             .foregroundColor(.theme.secondaryText)
                         
                         Button("Sign In") {
-                            dismiss()
+                            navigationCoordinator.navigateToLogin()
                         }
                         .foregroundColor(Color(hex: "#234BFF"))
                         .fontWeight(.medium)
@@ -208,7 +195,7 @@ struct SignUpView: View {
             }
             
             // Loading Overlay
-            if isLoading {
+            if viewModel.isLoading {
                 Color.black.opacity(0.3)
                     .ignoresSafeArea()
                     .allowsHitTesting(true)
@@ -218,7 +205,7 @@ struct SignUpView: View {
         .toolbar {
             ToolbarItem(placement: .navigationBarLeading) {
                 Button(action: {
-                    dismiss()
+                    navigationCoordinator.navigateToLogin()
                 }) {
                     Image(systemName: "chevron.left")
                         .foregroundColor(.theme.primaryText)
@@ -227,7 +214,7 @@ struct SignUpView: View {
         }
         .sheet(isPresented: $showDatePicker) {
             NavigationView {
-                DatePicker("Date of Birth", selection: $dateOfBirth, displayedComponents: .date)
+                DatePicker("Date of Birth", selection: $viewModel.dateOfBirth, displayedComponents: .date)
                     .datePickerStyle(WheelDatePickerStyle())
                     .labelsHidden()
                     .navigationTitle("Select Date of Birth")
@@ -235,7 +222,6 @@ struct SignUpView: View {
                     .toolbar {
                         ToolbarItem(placement: .navigationBarTrailing) {
                             Button("Done") {
-                                validateDateOfBirth()
                                 showDatePicker = false
                             }
                         }
@@ -243,98 +229,28 @@ struct SignUpView: View {
             }
             .presentationDetents([.medium])
         }
+        .onChange(of: viewModel.isSignUpSuccessful) { _, isSuccessful in
+            if isSuccessful {
+                navigationCoordinator.handleSuccessfulSignUp()
+            }
+        }
     }
     
     private var isFormValid: Bool {
-        !fullName.isEmpty &&
-        !email.isEmpty &&
-        !password.isEmpty &&
-        !confirmPassword.isEmpty &&
-        fullNameError == nil &&
-        emailError == nil &&
-        passwordError == nil &&
-        confirmPasswordError == nil &&
-        dateOfBirthError == nil
-    }
-    
-    private func validateFullName() {
-        if fullName.isEmpty {
-            fullNameError = "Full name is required"
-        } else if fullName.count < 2 {
-            fullNameError = "Full name must be at least 2 characters"
-        } else {
-            fullNameError = nil
-        }
-    }
-    
-    private func validateEmail() {
-        if email.isEmpty {
-            emailError = "Email is required"
-        } else if !email.contains("@") || !email.contains(".") {
-            emailError = "Please enter a valid email address"
-        } else {
-            emailError = nil
-        }
-    }
-    
-    private func validatePassword() {
-        if password.isEmpty {
-            passwordError = "Password is required"
-        } else if password.count < 8 {
-            passwordError = "Password must be at least 8 characters"
-        } else {
-            passwordError = nil
-        }
-    }
-    
-    private func validateConfirmPassword() {
-        if confirmPassword.isEmpty {
-            confirmPasswordError = "Please confirm your password"
-        } else if confirmPassword != password {
-            confirmPasswordError = "Passwords do not match"
-        } else {
-            confirmPasswordError = nil
-        }
-    }
-    
-    private func validateDateOfBirth() {
-        let calendar = Calendar.current
-        let ageComponents = calendar.dateComponents([.year], from: dateOfBirth, to: Date())
-        
-        if let age = ageComponents.year, age < 13 {
-            dateOfBirthError = "You must be at least 13 years old"
-        } else {
-            dateOfBirthError = nil
-        }
-    }
-    
-    private func handleSignUp() {
-        // Hide keyboard
-        UIApplication.shared.sendAction(#selector(UIResponder.resignFirstResponder), to: nil, from: nil, for: nil)
-        
-        // Validate all fields
-        validateFullName()
-        validateEmail()
-        validatePassword()
-        validateConfirmPassword()
-        validateDateOfBirth()
-        
-        guard isFormValid else { return }
-        
-        isLoading = true
-        
-        // Simulate sign up - Replace with actual authentication
-        DispatchQueue.main.asyncAfter(deadline: .now() + 2) {
-            isLoading = false
-            // Handle sign up success/failure
-            // For now, just dismiss
-            dismiss()
-        }
+        !viewModel.fullName.isEmpty &&
+        !viewModel.email.isEmpty &&
+        !viewModel.password.isEmpty &&
+        !viewModel.confirmPassword.isEmpty &&
+        viewModel.fullNameError.isEmpty &&
+        viewModel.emailError.isEmpty &&
+        viewModel.passwordError.isEmpty &&
+        viewModel.confirmPasswordError.isEmpty &&
+        viewModel.dateOfBirthError.isEmpty
     }
 }
 
 #Preview {
-    NavigationStack {
-        SignUpView()
-    }
+    SignUpView()
+        .environmentObject(NavigationCoordinator())
+        .environmentObject(AuthenticationService.shared)
 }

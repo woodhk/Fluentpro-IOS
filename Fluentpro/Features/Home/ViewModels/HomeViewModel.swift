@@ -107,15 +107,26 @@ class HomeViewModel: ObservableObject {
     }
     
     private func loadUserStats() async {
-        // Simulate loading user stats
-        // In a real app, this would fetch from a service
+        // In a real app, this would fetch user stats from the backend
+        // For now, initialize with default values since the backend
+        // doesn't have user stats endpoints yet
         
-        // In a real app, this would fetch user stats from a service
-        // For now, set some default values
-        streakDays = 5
-        totalLessonsCompleted = 25
+        // TODO: Replace with actual API call when backend stats endpoints are available
+        // do {
+        //     let stats = try await userService.getUserStats()
+        //     streakDays = stats.streakDays
+        //     totalLessonsCompleted = stats.totalLessonsCompleted
+        //     currentLevel = stats.currentLevel
+        //     xpPoints = stats.xpPoints
+        // } catch {
+        //     // Handle error and use defaults
+        // }
+        
+        // Default values for now
+        streakDays = 0
+        totalLessonsCompleted = 0
         currentLevel = "Beginner"
-        xpPoints = 1250
+        xpPoints = 0
     }
     
     private func clearUserData() {
@@ -129,24 +140,28 @@ class HomeViewModel: ObservableObject {
 }
 
 
-// MARK: - Mock Services (Replace with actual implementations)
+// MARK: - User Service
 class UserService {
     let userUpdatesPublisher = PassthroughSubject<Fluentpro.User?, Never>()
+    private let networkService = NetworkService.shared
     
     func getUser(userId: String) async throws -> Fluentpro.User {
-        // Mock implementation
-        return Fluentpro.User(
-            id: userId,
-            fullName: "John Doe",
-            email: "john@example.com",
-            dateOfBirth: Date()
+        // Get user from backend API
+        return try await networkService.get(
+            endpoint: .userProfile,
+            responseType: Fluentpro.User.self
         )
     }
     
     func updateUser(_ user: Fluentpro.User) async throws -> Fluentpro.User {
-        // Mock implementation
-        userUpdatesPublisher.send(user)
-        return user
+        // Update user via backend API
+        let updatedUser = try await networkService.put(
+            endpoint: .updateProfile,
+            body: user,
+            responseType: Fluentpro.User.self
+        )
+        userUpdatesPublisher.send(updatedUser)
+        return updatedUser
     }
 }
 

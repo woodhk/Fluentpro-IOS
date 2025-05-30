@@ -2,7 +2,7 @@ import SwiftUI
 
 struct OnboardingView: View {
     @State private var currentPage = 0
-    @State private var showHome = false
+    @EnvironmentObject var navigationCoordinator: NavigationCoordinator
     
     var body: some View {
         NavigationStack {
@@ -16,7 +16,7 @@ struct OnboardingView: View {
                     HStack {
                         Spacer()
                         Button(action: {
-                            showHome = true
+                            navigationCoordinator.navigateToHome()
                         }) {
                             Text("Skip")
                                 .font(.body)
@@ -117,7 +117,7 @@ struct OnboardingView: View {
                                 currentPage += 1
                             }
                         } else {
-                            showHome = true
+                            navigationCoordinator.navigateToHome()
                         }
                     }) {
                         Text(currentPage < 2 ? "Continue" : "Get Started")
@@ -133,14 +133,11 @@ struct OnboardingView: View {
                 }
             }
             .navigationBarHidden(true)
-            .navigationDestination(isPresented: $showHome) {
-                HomeView()
-                    .navigationBarBackButtonHidden(true)
-            }
         }
     }
 }
 
 #Preview {
     OnboardingView()
+        .environmentObject(NavigationCoordinator())
 }

@@ -10,7 +10,7 @@ import SwiftUI
 @main
 struct FluentproApp: App {
     @StateObject private var navigationCoordinator = NavigationCoordinator()
-    @ObservedObject private var authService = AuthenticationService.shared
+    @StateObject private var authService = AuthenticationService.shared
     
     var body: some Scene {
         WindowGroup {

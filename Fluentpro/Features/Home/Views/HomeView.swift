@@ -1,9 +1,9 @@
 import SwiftUI
 
 struct HomeView: View {
-    @State private var userName: String? = "John Doe" // Mock user name
-    @State private var showLogoutAlert = false
-    @Environment(\.dismiss) private var dismiss
+    @StateObject private var viewModel = HomeViewModel()
+    @EnvironmentObject var navigationCoordinator: NavigationCoordinator
+    @EnvironmentObject var authService: AuthenticationService
     
     var body: some View {
         NavigationStack {
@@ -14,13 +14,13 @@ struct HomeView: View {
                 
                 VStack(spacing: 32) {
                     // User Greeting
-                    if let userName = userName {
+                    if let user = viewModel.currentUser {
                         VStack(spacing: 8) {
                             Text("Welcome back,")
                                 .font(.title2)
                                 .foregroundColor(.theme.secondaryText)
                             
-                            Text(userName)
+                            Text(user.fullName)
                                 .font(.largeTitle)
                                 .fontWeight(.bold)
                                 .foregroundColor(.theme.primaryText)
@@ -45,7 +45,7 @@ struct HomeView: View {
                     
                     // Logout Button
                     Button(action: {
-                        showLogoutAlert = true
+                        viewModel.logout()
                     }) {
                         HStack {
                             Image(systemName: "rectangle.portrait.and.arrow.right")
@@ -65,6 +65,13 @@ struct HomeView: View {
                     .padding(.horizontal)
                     .padding(.bottom, 40)
                 }
+                
+                // Loading Overlay
+                if viewModel.isLoading {
+                    Color.black.opacity(0.3)
+                        .ignoresSafeArea()
+                        .allowsHitTesting(true)
+                }
             }
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
@@ -78,24 +85,30 @@ struct HomeView: View {
                     }
                 }
             }
-            .alert("Logout", isPresented: $showLogoutAlert) {
-                Button("Cancel", role: .cancel) { }
+            .alert("Logout", isPresented: $viewModel.showLogoutConfirmation) {
+                Button("Cancel", role: .cancel) {
+                    viewModel.cancelLogout()
+                }
                 Button("Logout", role: .destructive) {
-                    handleLogout()
+                    viewModel.confirmLogout()
                 }
             } message: {
                 Text("Are you sure you want to logout?")
             }
+            .onChange(of: viewModel.isLoggedOut) { _, isLoggedOut in
+                if isLoggedOut {
+                    navigationCoordinator.handleLogout()
+                }
+            }
+            .onAppear {
+                viewModel.loadUserData()
+            }
         }
-    }
-    
-    private func handleLogout() {
-        // Handle logout logic here
-        // For now, just dismiss or navigate to login
-        // In a real app, you would clear user session, tokens, etc.
     }
 }
 
 #Preview {
     HomeView()
+        .environmentObject(NavigationCoordinator())
+        .environmentObject(AuthenticationService.shared)
 }

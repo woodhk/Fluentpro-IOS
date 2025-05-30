@@ -16,10 +16,18 @@ struct Auth0CallbackRequest: Encodable {
 
 struct AuthResponse: Decodable {
     let accessToken: String
-    let refreshToken: String
+    let refreshToken: String?
     let tokenType: String
     let expiresIn: Int
     let user: User
+    
+    enum CodingKeys: String, CodingKey {
+        case accessToken = "access_token"
+        case refreshToken = "refresh_token"
+        case tokenType = "token_type"
+        case expiresIn = "expires_in"
+        case user
+    }
 }
 
 struct RefreshTokenRequest: Encodable {
@@ -30,6 +38,12 @@ struct RefreshTokenResponse: Decodable {
     let accessToken: String
     let tokenType: String
     let expiresIn: Int
+    
+    enum CodingKeys: String, CodingKey {
+        case accessToken = "access_token"
+        case tokenType = "token_type"
+        case expiresIn = "expires_in"
+    }
 }
 
 // MARK: - Authentication Service
@@ -42,7 +56,12 @@ class AuthenticationService: ObservableObject {
     // Current user
     @Published private(set) var currentUser: User?
     
-    private init() {}
+    private init() {
+        // Check for existing authentication on init
+        Task {
+            await checkStoredAuthentication()
+        }
+    }
     
     // MARK: - Public Methods
     
@@ -59,12 +78,36 @@ class AuthenticationService: ObservableObject {
             
             // Store tokens
             networkService.setAuthToken(response.accessToken)
-            try saveRefreshToken(response.refreshToken)
+            if let refreshToken = response.refreshToken {
+                try saveRefreshToken(refreshToken)
+            }
             
             // Update current user
             currentUser = response.user
             
             return response.user
+        } catch let error as NetworkError {
+            switch error {
+            case .httpError(let statusCode, let data):
+                if statusCode == 404 || statusCode == 401 {
+                    // User not found or invalid credentials
+                    throw AuthenticationError.userNotFound
+                }
+                // Try to parse error message from response
+                if let data = data {
+                    let decoder = JSONDecoder()
+                    decoder.keyDecodingStrategy = .convertFromSnakeCase
+                    if let errorResponse = try? decoder.decode(NetworkService.ErrorResponse.self, from: data),
+                       let message = errorResponse.message {
+                        throw AuthenticationError.loginFailedWithMessage(message)
+                    } else {
+                        throw AuthenticationError.loginFailedWithMessage("Login failed")
+                    }
+                }
+            default:
+                break
+            }
+            throw AuthenticationError.loginFailed(error)
         } catch {
             throw AuthenticationError.loginFailed(error)
         }
@@ -72,11 +115,21 @@ class AuthenticationService: ObservableObject {
     
     /// Sign up with email and password
     func signUp(fullName: String, email: String, password: String, dateOfBirth: Date) async throws -> User {
+        // Clear any existing auth state before signup
+        networkService.clearAuthToken()
+        deleteRefreshToken()
+        currentUser = nil
+        
+        // Format date as YYYY-MM-DD
+        let dateFormatter = DateFormatter()
+        dateFormatter.dateFormat = "yyyy-MM-dd"
+        let dateOfBirthString = dateFormatter.string(from: dateOfBirth)
+        
         let signUpRequest = SignUpRequest(
             fullName: fullName,
             email: email,
             password: password,
-            dateOfBirth: dateOfBirth
+            dateOfBirth: dateOfBirthString
         )
         
         do {
@@ -88,7 +141,9 @@ class AuthenticationService: ObservableObject {
             
             // Store tokens
             networkService.setAuthToken(response.accessToken)
-            try saveRefreshToken(response.refreshToken)
+            if let refreshToken = response.refreshToken {
+                try saveRefreshToken(refreshToken)
+            }
             
             // Update current user
             currentUser = response.user
@@ -112,7 +167,9 @@ class AuthenticationService: ObservableObject {
             
             // Store tokens
             networkService.setAuthToken(response.accessToken)
-            try saveRefreshToken(response.refreshToken)
+            if let refreshToken = response.refreshToken {
+                try saveRefreshToken(refreshToken)
+            }
             
             // Update current user
             currentUser = response.user
@@ -165,6 +222,33 @@ class AuthenticationService: ObservableObject {
     /// Check if user is authenticated
     var isAuthenticated: Bool {
         return networkService.getAuthToken() != nil && currentUser != nil
+    }
+    
+    /// Check for stored authentication on app launch
+    func checkStoredAuthentication() async {
+        // Check if we have a stored refresh token
+        guard getRefreshToken() != nil,
+              networkService.getAuthToken() != nil else {
+            return
+        }
+        
+        // Try to refresh the token and get user info
+        do {
+            try await refreshToken()
+            // Get user profile
+            let user = try await networkService.get(
+                endpoint: .userProfile,
+                responseType: User.self
+            )
+            await MainActor.run {
+                self.currentUser = user
+            }
+        } catch {
+            // If refresh fails, clear authentication
+            await MainActor.run {
+                self.logout()
+            }
+        }
     }
     
     /// Get current access token
@@ -224,6 +308,8 @@ class AuthenticationService: ObservableObject {
 // MARK: - Authentication Errors
 enum AuthenticationError: LocalizedError {
     case loginFailed(Error)
+    case loginFailedWithMessage(String)
+    case userNotFound
     case signUpFailed(Error)
     case auth0CallbackFailed(Error)
     case refreshTokenFailed(Error)
@@ -234,6 +320,10 @@ enum AuthenticationError: LocalizedError {
         switch self {
         case .loginFailed(let error):
             return "Login failed: \(error.localizedDescription)"
+        case .loginFailedWithMessage(let message):
+            return message
+        case .userNotFound:
+            return "No account found with these credentials. Please sign up to create an account."
         case .signUpFailed(let error):
             return "Sign up failed: \(error.localizedDescription)"
         case .auth0CallbackFailed(let error):

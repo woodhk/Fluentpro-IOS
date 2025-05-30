@@ -6,27 +6,32 @@
 //
 
 import SwiftUI
-import SwiftData
 
 @main
 struct FluentproApp: App {
-    var sharedModelContainer: ModelContainer = {
-        let schema = Schema([
-            Item.self,
-        ])
-        let modelConfiguration = ModelConfiguration(schema: schema, isStoredInMemoryOnly: false)
-
-        do {
-            return try ModelContainer(for: schema, configurations: [modelConfiguration])
-        } catch {
-            fatalError("Could not create ModelContainer: \(error)")
-        }
-    }()
-
+    @StateObject private var navigationCoordinator = NavigationCoordinator()
+    @ObservedObject private var authService = AuthenticationService.shared
+    
     var body: some Scene {
         WindowGroup {
-            ContentView()
+            Group {
+                switch navigationCoordinator.currentView {
+                case .login:
+                    LoginView()
+                case .signUp:
+                    SignUpView()
+                case .home:
+                    HomeView()
+                case .onboarding:
+                    OnboardingView()
+                case .profile:
+                    Text("Profile View - Coming Soon")
+                        .font(.title)
+                        .foregroundColor(.secondary)
+                }
+            }
+            .environmentObject(navigationCoordinator)
+            .environmentObject(authService)
         }
-        .modelContainer(sharedModelContainer)
     }
 }

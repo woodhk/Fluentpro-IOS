@@ -53,6 +53,7 @@ struct LoginView: View {
                                 
                                 SecureField("Enter your password", text: $viewModel.password)
                                     .textFieldStyle(RoundedBorderTextFieldStyle())
+                                    .textContentType(.password)
                             }
                         }
                         .padding(.horizontal)

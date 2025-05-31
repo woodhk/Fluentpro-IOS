@@ -83,6 +83,8 @@ struct SignUpView: View {
                             
                             SecureField("Create a password", text: $viewModel.password)
                                 .textFieldStyle(RoundedBorderTextFieldStyle())
+                                .textContentType(.oneTimeCode)  // This prevents password autofill
+                                .autocorrectionDisabled()
                             
                             if !viewModel.passwordError.isEmpty {
                                 Text(viewModel.passwordError)
@@ -100,6 +102,8 @@ struct SignUpView: View {
                             
                             SecureField("Confirm your password", text: $viewModel.confirmPassword)
                                 .textFieldStyle(RoundedBorderTextFieldStyle())
+                                .textContentType(.oneTimeCode)  // This prevents password autofill
+                                .autocorrectionDisabled()
                             
                             if !viewModel.confirmPasswordError.isEmpty {
                                 Text(viewModel.confirmPasswordError)
@@ -230,7 +234,9 @@ struct SignUpView: View {
             .presentationDetents([.medium])
         }
         .onChange(of: viewModel.isSignUpSuccessful) { _, isSuccessful in
+            print("🔍 SignUpView: isSignUpSuccessful changed to: \(isSuccessful)")
             if isSuccessful {
+                print("🚀 SignUpView: Calling handleSuccessfulSignUp()")
                 navigationCoordinator.handleSuccessfulSignUp()
             }
         }

@@ -49,6 +49,7 @@ class NavigationCoordinator: ObservableObject {
     }
     
     func navigateToOnboarding() {
+        print("👋 navigateToOnboarding called")
         navigateTo(.onboarding)
     }
     
@@ -59,6 +60,7 @@ class NavigationCoordinator: ObservableObject {
     }
     
     func handleSuccessfulSignUp() {
+        print("🎊 handleSuccessfulSignUp called - navigating to onboarding")
         navigateToOnboarding()
     }
     
@@ -73,13 +75,18 @@ class NavigationCoordinator: ObservableObject {
             .receive(on: DispatchQueue.main)
             .sink { [weak self] user in
                 if user != nil {
-                    // User is authenticated, stay on current view or go to home
-                    if self?.currentView == .login || self?.currentView == .signUp {
-                        // Don't auto-navigate, let the view models handle it
+                    // User is authenticated
+                    // Don't auto-navigate if we're in the middle of signup/onboarding flow
+                    if self?.currentView == .login || self?.currentView == .signUp || self?.currentView == .onboarding {
+                        // Let the view models handle navigation
+                        return
                     }
                 } else {
                     // User is not authenticated
-                    self?.currentView = .login
+                    // Only redirect to login if we're not already there or in signup
+                    if self?.currentView != .login && self?.currentView != .signUp {
+                        self?.currentView = .login
+                    }
                 }
             }
             .store(in: &cancellables)

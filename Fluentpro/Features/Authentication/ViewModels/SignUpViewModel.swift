@@ -47,14 +47,18 @@ class SignUpViewModel: ObservableObject {
         // Perform sign up
         Task {
             do {
-                _ = try await authenticationService.signUp(
+                let user = try await authenticationService.signUp(
                     fullName: fullName,
                     email: email,
                     password: password,
                     dateOfBirth: dateOfBirth
                 )
-                isSignUpSuccessful = true
-                clearForm()
+                print("✅ SignUp successful for user: \(user.email)")
+                await MainActor.run {
+                    print("🎯 Setting isSignUpSuccessful = true")
+                    isSignUpSuccessful = true
+                    clearForm()
+                }
             } catch {
                 errorMessage = handleError(error)
             }

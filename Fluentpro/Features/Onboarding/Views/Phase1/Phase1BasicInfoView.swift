@@ -12,11 +12,6 @@ struct Phase1BasicInfoView: View {
     
     var body: some View {
         VStack {
-            // Progress Bar
-            ProgressBar(currentStep: viewModel.currentBasicInfoStep.rawValue + 1, totalSteps: 3)
-                .padding(.horizontal)
-                .padding(.top)
-            
             // Content based on current step
             Group {
                 switch viewModel.currentBasicInfoStep {
@@ -26,8 +21,8 @@ struct Phase1BasicInfoView: View {
                     IndustrySelectionView(viewModel: viewModel)
                 case .role:
                     RoleInputView(viewModel: viewModel)
-                case .roleConfirmation:
-                    RoleConfirmationView(viewModel: viewModel)
+                case .roleResult:
+                    RoleMatchResultView(viewModel: viewModel)
                 }
             }
             .transition(.asymmetric(
@@ -36,8 +31,8 @@ struct Phase1BasicInfoView: View {
             ))
             .animation(.easeInOut(duration: 0.3), value: viewModel.currentBasicInfoStep)
             
-            // Navigation Buttons (except for role confirmation which has its own)
-            if viewModel.currentBasicInfoStep != .roleConfirmation {
+            // Navigation Buttons (except for role result which has its own)
+            if viewModel.currentBasicInfoStep != .roleResult {
                 HStack {
                     if viewModel.currentBasicInfoStep != .language {
                         Button(action: {
@@ -61,37 +56,3 @@ struct Phase1BasicInfoView: View {
     }
 }
 
-// Progress Bar Component
-struct ProgressBar: View {
-    let currentStep: Int
-    let totalSteps: Int
-    
-    var progress: Double {
-        Double(currentStep) / Double(totalSteps)
-    }
-    
-    var body: some View {
-        VStack(alignment: .leading, spacing: Theme.spacing.small) {
-            Text("Step \(currentStep) of \(totalSteps)")
-                .font(.caption)
-                .fontWeight(.medium)
-                .foregroundColor(.theme.secondaryText)
-            
-            GeometryReader { geometry in
-                ZStack(alignment: .leading) {
-                    // Background
-                    RoundedRectangle(cornerRadius: 4)
-                        .fill(Color.theme.tertiaryBackground)
-                        .frame(height: 8)
-                    
-                    // Progress
-                    RoundedRectangle(cornerRadius: 4)
-                        .fill(Color.theme.primary)
-                        .frame(width: geometry.size.width * CGFloat(progress), height: 8)
-                        .animation(.easeInOut(duration: 0.3), value: progress)
-                }
-            }
-            .frame(height: 8)
-        }
-    }
-}

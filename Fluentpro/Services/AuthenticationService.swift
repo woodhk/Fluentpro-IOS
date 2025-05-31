@@ -83,7 +83,9 @@ class AuthenticationService: ObservableObject {
             }
             
             // Update current user
-            currentUser = response.user
+            await MainActor.run {
+                currentUser = response.user
+            }
             
             return response.user
         } catch let error as NetworkError {
@@ -146,7 +148,9 @@ class AuthenticationService: ObservableObject {
             }
             
             // Update current user
-            currentUser = response.user
+            await MainActor.run {
+                currentUser = response.user
+            }
             
             return response.user
         } catch {
@@ -172,7 +176,9 @@ class AuthenticationService: ObservableObject {
             }
             
             // Update current user
-            currentUser = response.user
+            await MainActor.run {
+                currentUser = response.user
+            }
             
             return response.user
         } catch {
@@ -211,7 +217,9 @@ class AuthenticationService: ObservableObject {
         deleteRefreshToken()
         
         // Clear current user
-        currentUser = nil
+        Task { @MainActor in
+            currentUser = nil
+        }
         
         // Optionally call logout endpoint to invalidate tokens on server
         Task {

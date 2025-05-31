@@ -88,6 +88,7 @@ class HomeViewModel: ObservableObject {
     private func setupSubscriptions() {
         // Listen for authentication state changes
         authenticationService.$currentUser
+            .receive(on: DispatchQueue.main)
             .sink { [weak self] user in
                 if user == nil {
                     self?.clearUserData()
@@ -100,6 +101,7 @@ class HomeViewModel: ObservableObject {
         // Listen for user updates
         userService.userUpdatesPublisher
             .compactMap { $0 }
+            .receive(on: DispatchQueue.main)
             .sink { [weak self] user in
                 self?.currentUser = user
             }

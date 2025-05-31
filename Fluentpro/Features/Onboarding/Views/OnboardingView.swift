@@ -16,18 +16,31 @@ struct OnboardingView: View {
                     IntermissionView()
                 } else {
                     VStack {
-                        // Phase Indicator
-                        PhaseIndicator(currentPhase: viewModel.currentPhase)
+                        // Progress Bar (only show after welcome screens)
+                        if viewModel.currentPhase.rawValue >= OnboardingViewModel.OnboardingPhase.basicInfo.rawValue {
+                            OnboardingProgressBar(
+                                progress: viewModel.screenProgress,
+                                currentPhase: viewModel.currentPhaseLabel
+                            )
                             .padding(.horizontal)
                             .padding(.top)
+                        }
                         
                         // Phase Content
                         Group {
                             switch viewModel.currentPhase {
+                            case .welcome:
+                                WelcomeView(viewModel: viewModel)
+                            case .intro:
+                                IntroView(viewModel: viewModel)
                             case .basicInfo:
                                 Phase1BasicInfoView(viewModel: viewModel)
+                            case .phase1Complete:
+                                Phase1CompleteView(viewModel: viewModel)
                             case .aiConversation:
                                 Phase2ConversationView(viewModel: viewModel)
+                            case .phase2Complete:
+                                Phase2CompleteView(viewModel: viewModel)
                             case .courseSelection:
                                 Phase3CourseSelectionView(viewModel: viewModel)
                             }
@@ -42,7 +55,7 @@ struct OnboardingView: View {
             }
             .navigationBarHidden(true)
             .loadingOverlay(viewModel.isLoading)
-            .onChange(of: viewModel.isOnboardingComplete) { completed in
+            .onChange(of: viewModel.isOnboardingComplete) { oldValue, completed in
                 if completed {
                     // Navigation handled by viewModel
                 }
@@ -51,39 +64,43 @@ struct OnboardingView: View {
     }
 }
 
-// Phase Indicator Component
-struct PhaseIndicator: View {
-    let currentPhase: OnboardingViewModel.OnboardingPhase
+// Progress Bar Component
+struct OnboardingProgressBar: View {
+    let progress: Double
+    let currentPhase: String
     
     var body: some View {
-        VStack(spacing: Theme.spacing.small) {
-            Text("Phase \(currentPhase.phaseNumber)")
-                .font(.caption)
-                .fontWeight(.medium)
-                .foregroundColor(.theme.secondaryText)
+        VStack(alignment: .leading, spacing: Theme.spacing.small) {
+            HStack {
+                Text("Progress: \(currentPhase)")
+                    .font(.caption)
+                    .fontWeight(.medium)
+                    .foregroundColor(.theme.secondaryText)
+                
+                Spacer()
+                
+                Text("\(Int(progress * 100))%")
+                    .font(.caption)
+                    .fontWeight(.medium)
+                    .foregroundColor(.theme.primary)
+            }
             
-            HStack(spacing: Theme.spacing.small) {
-                ForEach(OnboardingViewModel.OnboardingPhase.allCases, id: \.self) { phase in
-                    PhaseIndicatorDot(
-                        isActive: phase.rawValue <= currentPhase.rawValue,
-                        isCurrent: phase == currentPhase
-                    )
+            GeometryReader { geometry in
+                ZStack(alignment: .leading) {
+                    // Background
+                    RoundedRectangle(cornerRadius: 6)
+                        .fill(Color.theme.tertiaryBackground)
+                        .frame(height: 12)
+                    
+                    // Progress
+                    RoundedRectangle(cornerRadius: 6)
+                        .fill(Color.theme.primary)
+                        .frame(width: geometry.size.width * CGFloat(progress), height: 12)
+                        .animation(.easeInOut(duration: 0.5), value: progress)
                 }
             }
+            .frame(height: 12)
         }
-    }
-}
-
-struct PhaseIndicatorDot: View {
-    let isActive: Bool
-    let isCurrent: Bool
-    
-    var body: some View {
-        Circle()
-            .fill(isActive ? Color.theme.primary : Color.theme.border)
-            .frame(width: isCurrent ? 12 : 8, height: isCurrent ? 12 : 8)
-            .animation(.easeInOut(duration: 0.3), value: isActive)
-            .animation(.easeInOut(duration: 0.3), value: isCurrent)
     }
 }
 

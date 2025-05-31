@@ -158,6 +158,6 @@ struct RoundedBorderTextFieldStyle: TextFieldStyle {
 
 #Preview {
     LoginView()
-        .environmentObject(NavigationCoordinator())
+        .environmentObject(NavigationCoordinator.shared)
         .environmentObject(AuthenticationService.shared)
 }

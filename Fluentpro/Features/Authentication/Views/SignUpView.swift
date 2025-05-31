@@ -257,6 +257,6 @@ struct SignUpView: View {
 
 #Preview {
     SignUpView()
-        .environmentObject(NavigationCoordinator())
+        .environmentObject(NavigationCoordinator.shared)
         .environmentObject(AuthenticationService.shared)
 }

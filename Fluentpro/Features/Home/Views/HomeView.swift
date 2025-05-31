@@ -109,6 +109,6 @@ struct HomeView: View {
 
 #Preview {
     HomeView()
-        .environmentObject(NavigationCoordinator())
+        .environmentObject(NavigationCoordinator.shared)
         .environmentObject(AuthenticationService.shared)
 }

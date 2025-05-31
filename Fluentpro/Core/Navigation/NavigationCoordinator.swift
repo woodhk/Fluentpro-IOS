@@ -12,6 +12,9 @@ enum AppView {
 
 @MainActor
 class NavigationCoordinator: ObservableObject {
+    // MARK: - Singleton
+    static let shared = NavigationCoordinator()
+    
     // MARK: - Published Properties
     @Published var currentView: AppView = .login
     @Published var navigationPath = NavigationPath()

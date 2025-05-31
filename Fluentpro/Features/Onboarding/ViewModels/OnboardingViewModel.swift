@@ -1,314 +1,246 @@
 import Foundation
 import Combine
+import SwiftUI
 
 @MainActor
 class OnboardingViewModel: ObservableObject {
-    // MARK: - Onboarding Steps
-    enum OnboardingStep: Int, CaseIterable {
-        case welcome = 0
-        case languageSelection
-        case proficiencyLevel
-        case learningGoals
-        case dailyGoal
-        case notifications
-        case completion
+    // MARK: - Onboarding Phases
+    enum OnboardingPhase: Int, CaseIterable {
+        case basicInfo = 1
+        case aiConversation = 2
+        case courseSelection = 3
         
         var title: String {
             switch self {
-            case .welcome:
-                return "Welcome to FluentPro"
-            case .languageSelection:
-                return "Choose Your Language"
-            case .proficiencyLevel:
-                return "What's Your Level?"
-            case .learningGoals:
-                return "Set Your Goals"
-            case .dailyGoal:
-                return "Daily Practice Goal"
-            case .notifications:
-                return "Stay on Track"
-            case .completion:
-                return "You're All Set!"
+                case .basicInfo: return "Basic Information"
+                case .aiConversation: return "Let's Chat"
+                case .courseSelection: return "Your Courses"
             }
         }
         
-        var description: String {
-            switch self {
-            case .welcome:
-                return "Start your journey to language mastery"
-            case .languageSelection:
-                return "Select the language you want to learn"
-            case .proficiencyLevel:
-                return "Help us personalize your learning experience"
-            case .learningGoals:
-                return "What would you like to achieve?"
-            case .dailyGoal:
-                return "How much time can you practice daily?"
-            case .notifications:
-                return "Get reminders to keep your streak alive"
-            case .completion:
-                return "Ready to begin your learning adventure!"
-            }
+        var phaseNumber: String {
+            return "\(rawValue)/3"
         }
+    }
+    
+    enum BasicInfoStep: Int, CaseIterable {
+        case language = 0
+        case industry = 1
+        case role = 2
+        case roleConfirmation = 3
     }
     
     // MARK: - Published Properties
-    @Published var currentStep: OnboardingStep = .welcome
+    @Published var currentPhase: OnboardingPhase = .basicInfo
+    @Published var currentBasicInfoStep: BasicInfoStep = .language
     @Published var isLoading: Bool = false
     @Published var errorMessage: String = ""
     @Published var isOnboardingComplete: Bool = false
+    @Published var showIntermission: Bool = false
     
-    // User selections
-    @Published var selectedLanguage: Language?
-    @Published var selectedProficiencyLevel: ProficiencyLevel?
-    @Published var selectedGoals: Set<LearningGoal> = []
-    @Published var dailyGoalMinutes: Int = 15
-    @Published var notificationsEnabled: Bool = true
-    @Published var preferredNotificationTime: Date = Date()
+    // Onboarding Data
+    @Published var onboardingData = OnboardingData()
     
-    // UI State
-    @Published var canProceed: Bool = false
-    @Published var showSkipButton: Bool = false
+    // Phase 1 State
+    @Published var showRoleConfirmation: Bool = false
+    @Published var roleSearchInProgress: Bool = false
+    
+    // Phase 2 State
+    @Published var conversationMessages: [AIConversationMessage] = []
+    @Published var userMessageText: String = ""
+    @Published var isAITyping: Bool = false
+    @Published var showContinueButton: Bool = false
+    
+    // Phase 3 State
+    @Published var coursesLoading: Bool = false
+    @Published var showCompletionScreen: Bool = false
     
     // MARK: - Private Properties
-    private let userPreferencesService: UserPreferencesService
+    private let navigationCoordinator = NavigationCoordinator.shared
+    private let authService = AuthenticationService.shared
+    private let mockService = OnboardingMockService.shared
+    private let aiService = AIConversationService()
     private var cancellables = Set<AnyCancellable>()
     
     // MARK: - Initialization
-    init(userPreferencesService: UserPreferencesService = UserPreferencesService()) {
-        self.userPreferencesService = userPreferencesService
-        setupValidation()
+    init() {
+        setupSubscriptions()
     }
     
-    // MARK: - Public Methods
-    func nextStep() {
-        guard canProceed else { return }
-        
-        if let nextStep = OnboardingStep(rawValue: currentStep.rawValue + 1) {
-            currentStep = nextStep
-            updateStepValidation()
-        } else {
-            completeOnboarding()
-        }
-    }
-    
-    func previousStep() {
-        if let previousStep = OnboardingStep(rawValue: currentStep.rawValue - 1) {
-            currentStep = previousStep
-            updateStepValidation()
-        }
-    }
-    
-    func skipStep() {
-        guard showSkipButton else { return }
-        nextStep()
-    }
-    
+    // MARK: - Phase 1 Methods
     func selectLanguage(_ language: Language) {
-        selectedLanguage = language
+        onboardingData.nativeLanguage = language
+        nextBasicInfoStep()
     }
     
-    func selectProficiencyLevel(_ level: ProficiencyLevel) {
-        selectedProficiencyLevel = level
+    func selectIndustry(_ industry: Industry) {
+        onboardingData.industry = industry
+        nextBasicInfoStep()
     }
     
-    func toggleGoal(_ goal: LearningGoal) {
-        if selectedGoals.contains(goal) {
-            selectedGoals.remove(goal)
+    func submitRole() {
+        guard !onboardingData.roleTitle.isEmpty && !onboardingData.roleDescription.isEmpty else {
+            errorMessage = "Please provide both role title and description"
+            return
+        }
+        
+        searchForMatchingRole()
+    }
+    
+    func confirmRole(_ confirmed: Bool) {
+        if confirmed {
+            // User confirmed the matched role
+            moveToPhase(.aiConversation)
         } else {
-            selectedGoals.insert(goal)
+            // User rejected the match, continue with custom role
+            onboardingData.matchedRole = nil
+            moveToPhase(.aiConversation)
         }
     }
     
-    func setDailyGoal(_ minutes: Int) {
-        dailyGoalMinutes = minutes
-    }
-    
-    func toggleNotifications() {
-        notificationsEnabled.toggle()
-    }
-    
-    func completeOnboarding() {
-        isLoading = true
+    private func searchForMatchingRole() {
+        roleSearchInProgress = true
         errorMessage = ""
         
         Task {
             do {
-                // Save user preferences
-                let preferences = UserPreferences(
-                    selectedLanguage: selectedLanguage!,
-                    proficiencyLevel: selectedProficiencyLevel!,
-                    learningGoals: Array(selectedGoals),
-                    dailyGoalMinutes: dailyGoalMinutes,
-                    notificationsEnabled: notificationsEnabled,
-                    preferredNotificationTime: preferredNotificationTime
+                let response = try await mockService.matchRole(
+                    title: onboardingData.roleTitle,
+                    description: onboardingData.roleDescription,
+                    industry: onboardingData.industry?.rawValue ?? ""
                 )
                 
-                try await userPreferencesService.savePreferences(preferences)
-                
-                // Request notification permissions if enabled
-                if notificationsEnabled {
-                    await requestNotificationPermissions()
+                if response.matched, let role = response.role {
+                    onboardingData.matchedRole = role
+                    showRoleConfirmation = true
+                    currentBasicInfoStep = .roleConfirmation
+                } else {
+                    // No match found, proceed to AI conversation
+                    onboardingData.matchedRole = nil
+                    moveToPhase(.aiConversation)
                 }
-                
-                isOnboardingComplete = true
             } catch {
-                errorMessage = "Failed to save preferences: \(error.localizedDescription)"
+                errorMessage = "Error searching for role: \(error.localizedDescription)"
             }
-            isLoading = false
+            roleSearchInProgress = false
+        }
+    }
+    
+    private func nextBasicInfoStep() {
+        if let nextStep = BasicInfoStep(rawValue: currentBasicInfoStep.rawValue + 1) {
+            currentBasicInfoStep = nextStep
+        }
+    }
+    
+    func previousBasicInfoStep() {
+        if let previousStep = BasicInfoStep(rawValue: currentBasicInfoStep.rawValue - 1) {
+            currentBasicInfoStep = previousStep
+            showRoleConfirmation = false
+        }
+    }
+    
+    // MARK: - Phase 2 Methods
+    func sendMessage() {
+        guard !userMessageText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else { return }
+        
+        let userMessage = AIConversationMessage(content: userMessageText, isUser: true)
+        conversationMessages.append(userMessage)
+        onboardingData.conversationMessages = conversationMessages
+        
+        let messageText = userMessageText
+        userMessageText = ""
+        isAITyping = true
+        
+        Task {
+            do {
+                let aiResponse = try await aiService.processUserMessage(messageText, context: onboardingData)
+                let aiMessage = AIConversationMessage(content: aiResponse, isUser: false)
+                conversationMessages.append(aiMessage)
+                onboardingData.conversationMessages = conversationMessages
+                
+                // Check if we should show continue button
+                showContinueButton = aiService.shouldShowContinueButton(messageCount: conversationMessages.count)
+            } catch {
+                errorMessage = "Failed to get AI response"
+            }
+            isAITyping = false
+        }
+    }
+    
+    func continueFromConversation() {
+        // Extract needs from conversation
+        onboardingData.identifiedNeeds = aiService.extractNeeds(from: conversationMessages)
+        
+        // Show intermission and load courses
+        showIntermission = true
+        loadCourses()
+    }
+    
+    // MARK: - Phase 3 Methods
+    private func loadCourses() {
+        Task {
+            // Simulate loading time
+            try await Task.sleep(nanoseconds: 2_000_000_000) // 2 seconds
+            
+            do {
+                let response = try await mockService.recommendCourses(
+                    for: onboardingData.matchedRole?.id,
+                    industry: onboardingData.industry?.rawValue ?? "",
+                    needs: onboardingData.identifiedNeeds
+                )
+                
+                onboardingData.availableCourses = response.courses
+                showIntermission = false
+                moveToPhase(.courseSelection)
+            } catch {
+                errorMessage = "Failed to load courses"
+                showIntermission = false
+            }
+        }
+    }
+    
+    func selectCourse(_ course: Course) {
+        onboardingData.selectedCourse = course
+        completeOnboarding()
+    }
+    
+    func acknowledgeNoCourses() {
+        completeOnboarding()
+    }
+    
+    private func completeOnboarding() {
+        showCompletionScreen = true
+    }
+    
+    func finishOnboarding() {
+        // Save onboarding data (would normally persist to backend)
+        isOnboardingComplete = true
+        navigationCoordinator.navigateToHome()
+    }
+    
+    // MARK: - Navigation
+    private func moveToPhase(_ phase: OnboardingPhase) {
+        withAnimation {
+            currentPhase = phase
+        }
+    }
+    
+    func canProceedInBasicInfo() -> Bool {
+        switch currentBasicInfoStep {
+        case .language:
+            return onboardingData.nativeLanguage != nil
+        case .industry:
+            return onboardingData.industry != nil
+        case .role:
+            return !onboardingData.roleTitle.isEmpty && !onboardingData.roleDescription.isEmpty
+        case .roleConfirmation:
+            return true
         }
     }
     
     // MARK: - Private Methods
-    private func setupValidation() {
-        // Combine publishers to validate current step
-        Publishers.CombineLatest4(
-            $currentStep,
-            $selectedLanguage,
-            $selectedProficiencyLevel,
-            $selectedGoals
-        )
-        .sink { [weak self] step, language, level, goals in
-            self?.validateCurrentStep(step: step, language: language, level: level, goals: goals)
-        }
-        .store(in: &cancellables)
-    }
-    
-    private func validateCurrentStep(
-        step: OnboardingStep,
-        language: Language?,
-        level: ProficiencyLevel?,
-        goals: Set<LearningGoal>
-    ) {
-        switch step {
-        case .welcome:
-            canProceed = true
-            showSkipButton = false
-        case .languageSelection:
-            canProceed = language != nil
-            showSkipButton = false
-        case .proficiencyLevel:
-            canProceed = level != nil
-            showSkipButton = false
-        case .learningGoals:
-            canProceed = !goals.isEmpty
-            showSkipButton = true
-        case .dailyGoal:
-            canProceed = true
-            showSkipButton = true
-        case .notifications:
-            canProceed = true
-            showSkipButton = true
-        case .completion:
-            canProceed = true
-            showSkipButton = false
-        }
-    }
-    
-    private func updateStepValidation() {
-        validateCurrentStep(
-            step: currentStep,
-            language: selectedLanguage,
-            level: selectedProficiencyLevel,
-            goals: selectedGoals
-        )
-    }
-    
-    private func requestNotificationPermissions() async {
-        // Implementation would request notification permissions
-        // This is a placeholder for the actual implementation
-    }
-}
-
-// MARK: - Supporting Types
-enum Language: String, CaseIterable, Identifiable, Codable {
-    case spanish = "Spanish"
-    case french = "French"
-    case german = "German"
-    case italian = "Italian"
-    case portuguese = "Portuguese"
-    case chinese = "Chinese"
-    case japanese = "Japanese"
-    case korean = "Korean"
-    
-    var id: String { rawValue }
-    
-    var flag: String {
-        switch self {
-        case .spanish: return "🇪🇸"
-        case .french: return "🇫🇷"
-        case .german: return "🇩🇪"
-        case .italian: return "🇮🇹"
-        case .portuguese: return "🇵🇹"
-        case .chinese: return "🇨🇳"
-        case .japanese: return "🇯🇵"
-        case .korean: return "🇰🇷"
-        }
-    }
-}
-
-enum ProficiencyLevel: String, CaseIterable, Identifiable, Codable {
-    case beginner = "Beginner"
-    case elementary = "Elementary"
-    case intermediate = "Intermediate"
-    case advanced = "Advanced"
-    case native = "Native"
-    
-    var id: String { rawValue }
-    
-    var description: String {
-        switch self {
-        case .beginner:
-            return "I'm new to this language"
-        case .elementary:
-            return "I know some basic words and phrases"
-        case .intermediate:
-            return "I can have simple conversations"
-        case .advanced:
-            return "I'm comfortable with most situations"
-        case .native:
-            return "I'm a native speaker"
-        }
-    }
-}
-
-enum LearningGoal: String, CaseIterable, Identifiable, Codable, Hashable {
-    case travel = "Travel"
-    case business = "Business"
-    case culture = "Culture"
-    case family = "Family & Friends"
-    case education = "Education"
-    case career = "Career Growth"
-    
-    var id: String { rawValue }
-    
-    var icon: String {
-        switch self {
-        case .travel: return "✈️"
-        case .business: return "💼"
-        case .culture: return "🎭"
-        case .family: return "👨‍👩‍👧‍👦"
-        case .education: return "🎓"
-        case .career: return "📈"
-        }
-    }
-}
-
-// MARK: - User Preferences Model
-struct UserPreferences: Codable {
-    let selectedLanguage: Language
-    let proficiencyLevel: ProficiencyLevel
-    let learningGoals: [LearningGoal]
-    let dailyGoalMinutes: Int
-    let notificationsEnabled: Bool
-    let preferredNotificationTime: Date
-}
-
-// MARK: - Mock Service
-class UserPreferencesService {
-    func savePreferences(_ preferences: UserPreferences) async throws {
-        // Mock implementation
-        // In a real app, this would save to UserDefaults or a backend service
+    private func setupSubscriptions() {
+        // Any Combine subscriptions needed
     }
 }
 

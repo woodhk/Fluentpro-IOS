@@ -358,14 +358,14 @@ class OnboardingViewModel: ObservableObject {
                 
                 print("🎯 [ONBOARDING] API Response: \(response.totalMatches) matches found")
                 
-                if !response.matches.isEmpty {
+                if !response.matchedRoles.isEmpty {
                     // Convert API roles to local Role model
-                    let roles = response.matches.map { match in
+                    let roles = response.matchedRoles.map { match in
                         Role(
-                            id: match.role.id,
-                            title: match.role.title,
-                            description: match.role.description,
-                            industry: match.role.industryName ?? "Unknown",
+                            id: match.id,
+                            title: match.title,
+                            description: match.description,
+                            industry: match.industryName,
                             commonTasks: [],
                             confidence: match.relevanceScore
                         )

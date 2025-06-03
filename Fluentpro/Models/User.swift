@@ -31,6 +31,19 @@ struct User: Codable {
     }
 }
 
+// MARK: - User Profile Industry Object
+struct UserProfileIndustry: Codable {
+    let id: String
+    let name: String?
+}
+
+// MARK: - User Profile Role Object  
+struct UserProfileRole: Codable {
+    let id: String
+    let title: String?
+    let description: String?
+}
+
 // MARK: - User Profile (Extended model with onboarding data)
 struct UserProfile: Codable {
     let success: Bool?
@@ -39,8 +52,8 @@ struct UserProfile: Codable {
     let email: String
     let dateOfBirth: String
     let nativeLanguage: String?
-    let industry: String?
-    let role: String?
+    let industry: UserProfileIndustry?
+    let role: UserProfileRole?
     let onboardingStatus: String
     let createdAt: String?
     let updatedAt: String?

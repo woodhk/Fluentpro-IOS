@@ -84,27 +84,47 @@ struct APIRole: Codable {
 }
 
 struct RoleMatch: Codable {
-    let role: APIRole
+    let id: String
+    let title: String
+    let description: String
+    let industryName: String
+    let hierarchyLevel: String
+    let searchKeywords: [String]
     let relevanceScore: Double
-    let matchReasons: [String]
-    let isGoodMatch: Bool
-    let isExcellentMatch: Bool
     
     enum CodingKeys: String, CodingKey {
-        case role
+        case id
+        case title
+        case description
+        case industryName = "industry_name"
+        case hierarchyLevel = "hierarchy_level"
+        case searchKeywords = "search_keywords"
         case relevanceScore = "relevance_score"
-        case matchReasons = "match_reasons"
-        case isGoodMatch = "is_good_match"
-        case isExcellentMatch = "is_excellent_match"
+    }
+}
+
+struct UserJobInput: Codable {
+    let jobTitle: String
+    let jobDescription: String
+    let userIndustry: String
+    
+    enum CodingKeys: String, CodingKey {
+        case jobTitle = "job_title"
+        case jobDescription = "job_description"
+        case userIndustry = "user_industry"
     }
 }
 
 struct RoleMatchResponse: Codable {
-    let matches: [RoleMatch]
+    let success: Bool
+    let userJobInput: UserJobInput
+    let matchedRoles: [RoleMatch]
     let totalMatches: Int
     
     enum CodingKeys: String, CodingKey {
-        case matches
+        case success
+        case userJobInput = "user_job_input"
+        case matchedRoles = "matched_roles"
         case totalMatches = "total_matches"
     }
 }

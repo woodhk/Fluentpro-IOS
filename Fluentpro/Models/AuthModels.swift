@@ -23,6 +23,7 @@ struct SignUpRequest: Codable {
 
 // MARK: - Auth Response (used for both login and signup)
 struct AuthResponse: Codable {
+    let success: Bool
     let accessToken: String
     let refreshToken: String
     let tokenType: String
@@ -30,6 +31,7 @@ struct AuthResponse: Codable {
     let user: Fluentpro.User
     
     enum CodingKeys: String, CodingKey {
+        case success
         case accessToken = "access_token"
         case refreshToken = "refresh_token"
         case tokenType = "token_type"

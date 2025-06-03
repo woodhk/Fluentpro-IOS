@@ -80,13 +80,16 @@ extension Color {
     
     struct ColorTheme {
         let primary = Color(hex: "#234BFF")
+        let accent = Color(hex: "#234BFF")
         let background = Color(UIColor.systemBackground)
         let secondaryBackground = Color(UIColor.secondarySystemBackground)
         let tertiaryBackground = Color(UIColor.tertiarySystemBackground)
+        let surface = Color(UIColor.secondarySystemBackground)
         let primaryText = Color(UIColor.label)
         let secondaryText = Color(UIColor.secondaryLabel)
         let tertiaryText = Color(UIColor.tertiaryLabel)
         let border = Color(UIColor.separator)
+        let divider = Color(UIColor.separator)
         let error = Color(UIColor.systemRed)
         let success = Color(UIColor.systemGreen)
         let warning = Color(UIColor.systemOrange)

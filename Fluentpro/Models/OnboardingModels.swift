@@ -27,35 +27,19 @@ enum Language: String, CaseIterable, Identifiable, Codable {
 
 // MARK: - Industry
 enum Industry: String, CaseIterable, Identifiable {
-    case technology = "Technology"
-    case finance = "Finance"
-    case healthcare = "Healthcare"
-    case retail = "Retail"
-    case manufacturing = "Manufacturing"
-    case education = "Education"
-    case hospitality = "Hospitality"
-    case consulting = "Consulting"
+    case bankingFinance = "Banking & Finance"
+    case shippingLogistics = "Shipping & Logistics"
     case realEstate = "Real Estate"
-    case marketing = "Marketing & Advertising"
-    case legal = "Legal"
-    case logistics = "Logistics & Supply Chain"
+    case hotelsHospitality = "Hotels & Hospitality"
     
     var id: String { rawValue }
     
     var icon: String {
         switch self {
-        case .technology: return "laptopcomputer"
-        case .finance: return "chart.line.uptrend.xyaxis"
-        case .healthcare: return "heart.text.square"
-        case .retail: return "cart"
-        case .manufacturing: return "gearshape.2"
-        case .education: return "graduationcap"
-        case .hospitality: return "bed.double"
-        case .consulting: return "person.3"
+        case .bankingFinance: return "chart.line.uptrend.xyaxis"
+        case .shippingLogistics: return "shippingbox"
         case .realEstate: return "house"
-        case .marketing: return "megaphone"
-        case .legal: return "scale.3d"
-        case .logistics: return "shippingbox"
+        case .hotelsHospitality: return "bed.double"
         }
     }
 }
@@ -67,14 +51,58 @@ struct Role: Identifiable, Codable, Equatable {
     let description: String
     let industry: String
     let commonTasks: [String]
+    let confidence: Double? // For AI matching confidence
     
-    init(id: String = UUID().uuidString, title: String, description: String, industry: String, commonTasks: [String] = []) {
+    init(id: String = UUID().uuidString, title: String, description: String, industry: String, commonTasks: [String] = [], confidence: Double? = nil) {
         self.id = id
         self.title = title
         self.description = description
         self.industry = industry
         self.commonTasks = commonTasks
+        self.confidence = confidence
     }
+}
+
+// MARK: - Conversation Partners
+enum ConversationPartner: String, CaseIterable, Identifiable {
+    case clients = "Clients"
+    case customers = "Customers"
+    case colleagues = "Colleagues"
+    case suppliers = "Suppliers"
+    case partners = "Partners"
+    case seniorManagement = "Senior Management"
+    case stakeholders = "Stakeholders"
+    case other = "Other"
+    
+    var id: String { rawValue }
+}
+
+// MARK: - Conversation Situations
+enum ConversationSituation: String, CaseIterable, Identifiable {
+    case interviews = "Interviews"
+    case conflictResolution = "Conflict Resolution"
+    case phoneCalls = "Phone Calls"
+    case oneOnOnes = "One-on-Ones"
+    case feedbackSessions = "Feedback Sessions"
+    case teamDiscussions = "Team Discussions"
+    case negotiations = "Negotiations"
+    case statusUpdates = "Status Updates"
+    case informalChats = "Informal Chats"
+    case briefings = "Briefings"
+    case meetings = "Meetings"
+    case presentations = "Presentations"
+    case trainingSessions = "Training Sessions"
+    case clientConversations = "Client Conversations"
+    case videoConferences = "Video Conferences"
+    
+    var id: String { rawValue }
+}
+
+// MARK: - Partner Situations Mapping
+struct PartnerSituations: Identifiable {
+    let id = UUID()
+    let partner: ConversationPartner
+    var situations: Set<ConversationSituation> = []
 }
 
 // MARK: - Course Models
@@ -134,18 +162,32 @@ struct OnboardingData {
     var industry: Industry?
     var roleTitle: String = ""
     var roleDescription: String = ""
-    var matchedRole: Role?
-    var conversationMessages: [AIConversationMessage] = []
-    var identifiedNeeds: [String] = []
-    var selectedCourse: Course?
-    var availableCourses: [Course] = []
+    var matchedRoles: [Role] = [] // Now stores multiple roles with confidence scores
+    var selectedRole: Role? // The role user selected
+    var didSelectNoMatch: Bool = false // If user selected "none of these are my role"
+    
+    // Phase 2 data
+    var selectedConversationPartners: Set<ConversationPartner> = []
+    var partnerSituations: [PartnerSituations] = []
+    var currentPartnerIndex: Int = 0
     
     var isPhase1Complete: Bool {
-        nativeLanguage != nil && industry != nil && !roleTitle.isEmpty && !roleDescription.isEmpty
+        nativeLanguage != nil && 
+        industry != nil && 
+        !roleTitle.isEmpty && 
+        !roleDescription.isEmpty &&
+        (selectedRole != nil || didSelectNoMatch)
     }
     
     var isPhase2Complete: Bool {
-        conversationMessages.count >= 6 && !identifiedNeeds.isEmpty
+        !selectedConversationPartners.isEmpty &&
+        partnerSituations.count == selectedConversationPartners.count &&
+        partnerSituations.allSatisfy { !$0.situations.isEmpty }
+    }
+    
+    var currentPartnerForSituations: ConversationPartner? {
+        guard currentPartnerIndex < Array(selectedConversationPartners).count else { return nil }
+        return Array(selectedConversationPartners).sorted(by: { $0.rawValue < $1.rawValue })[currentPartnerIndex]
     }
 }
 
@@ -157,9 +199,7 @@ struct RoleMatchRequest: Codable {
 }
 
 struct RoleMatchResponse: Codable {
-    let matched: Bool
-    let role: Role?
-    let confidence: Double?
+    let roles: [Role] // Multiple roles with confidence scores
 }
 
 struct CourseRecommendationRequest: Codable {

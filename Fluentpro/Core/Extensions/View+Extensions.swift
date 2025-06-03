@@ -7,7 +7,7 @@ extension View {
     /// Applies standard card styling
     func cardStyle() -> some View {
         self
-            .background(Color.secondaryBackground)
+            .background(Color.theme.secondaryBackground)
             .cornerRadius(Theme.cornerRadius.medium)
             .shadow(color: Color.black.opacity(0.1), radius: 4, x: 0, y: 2)
     }
@@ -65,7 +65,7 @@ struct PrimaryButtonStyle: ButtonStyle {
             .frame(height: 50)
             .background(
                 RoundedRectangle(cornerRadius: Theme.cornerRadius.medium)
-                    .fill(isEnabled ? Color.primary : Color.gray)
+                    .fill(isEnabled ? Color.theme.primary : Color.gray)
             )
             .scaleEffect(configuration.isPressed ? 0.96 : 1.0)
             .animation(.easeInOut(duration: 0.1), value: configuration.isPressed)
@@ -78,12 +78,12 @@ struct SecondaryButtonStyle: ButtonStyle {
     func makeBody(configuration: Configuration) -> some View {
         configuration.label
             .font(.headline)
-            .foregroundColor(isEnabled ? .primary : .gray)
+            .foregroundColor(isEnabled ? Color.theme.primary : .gray)
             .frame(maxWidth: .infinity)
             .frame(height: 50)
             .background(
                 RoundedRectangle(cornerRadius: Theme.cornerRadius.medium)
-                    .stroke(isEnabled ? Color.primary : Color.gray, lineWidth: 2)
+                    .stroke(isEnabled ? Color.theme.primary : Color.gray, lineWidth: 2)
             )
             .scaleEffect(configuration.isPressed ? 0.96 : 1.0)
             .animation(.easeInOut(duration: 0.1), value: configuration.isPressed)
@@ -94,7 +94,7 @@ struct TextButtonStyle: ButtonStyle {
     func makeBody(configuration: Configuration) -> some View {
         configuration.label
             .font(.body)
-            .foregroundColor(.primary)
+            .foregroundColor(Color.theme.primary)
             .scaleEffect(configuration.isPressed ? 0.95 : 1.0)
             .opacity(configuration.isPressed ? 0.8 : 1.0)
             .animation(.easeInOut(duration: 0.1), value: configuration.isPressed)

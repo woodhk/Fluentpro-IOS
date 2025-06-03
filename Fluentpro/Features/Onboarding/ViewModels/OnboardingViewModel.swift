@@ -10,9 +10,10 @@ class OnboardingViewModel: ObservableObject {
         case intro = 1
         case basicInfo = 2
         case phase1Complete = 3
-        case aiConversation = 4
-        case phase2Complete = 5
-        case courseSelection = 6
+        case conversationPartners = 4
+        case conversationSituations = 5
+        case phase2Complete = 6
+        case onboardingComplete = 7
         
         var title: String {
             switch self {
@@ -20,9 +21,10 @@ class OnboardingViewModel: ObservableObject {
                 case .intro: return "Getting Started"
                 case .basicInfo: return "Phase 1: Role Identification"
                 case .phase1Complete: return "Phase 1 Complete"
-                case .aiConversation: return "Phase 2: AI Consultation"
+                case .conversationPartners: return "Phase 2: Communication Context"
+                case .conversationSituations: return "Phase 2: Communication Situations"
                 case .phase2Complete: return "Phase 2 Complete"
-                case .courseSelection: return "Phase 3: Course Selection"
+                case .onboardingComplete: return "Onboarding Complete"
             }
         }
         
@@ -32,9 +34,10 @@ class OnboardingViewModel: ObservableObject {
                 case .intro: return 0.1
                 case .basicInfo: return 0.3
                 case .phase1Complete: return 0.45
-                case .aiConversation: return 0.65
-                case .phase2Complete: return 0.8
-                case .courseSelection: return 1.0
+                case .conversationPartners: return 0.6
+                case .conversationSituations: return 0.75
+                case .phase2Complete: return 0.9
+                case .onboardingComplete: return 1.0
             }
         }
     }
@@ -47,7 +50,7 @@ class OnboardingViewModel: ObservableObject {
     }
     
     enum RoleMatchResult {
-        case matched(Role)
+        case matched([Role]) // Now returns multiple roles
         case notMatched
     }
     
@@ -67,13 +70,11 @@ class OnboardingViewModel: ObservableObject {
     @Published var roleSearchInProgress: Bool = false
     
     // Phase 2 State
-    @Published var conversationMessages: [AIConversationMessage] = []
-    @Published var userMessageText: String = ""
-    @Published var isAITyping: Bool = false
-    @Published var conversationComplete: Bool = false
+    @Published var selectedPartners: Set<ConversationPartner> = []
+    @Published var currentPartnerSituations: PartnerSituations?
+    @Published var allPartnerSituations: [PartnerSituations] = []
     
-    // Phase 3 State
-    @Published var coursesLoading: Bool = false
+    // Completion State
     @Published var showCompletionScreen: Bool = false
     
     // MARK: - Computed Properties
@@ -86,15 +87,20 @@ class OnboardingViewModel: ObservableObject {
         case .basicInfo:
             // Progress within Phase 1 based on current step
             let stepProgress = Double(currentBasicInfoStep.rawValue) / Double(BasicInfoStep.allCases.count - 1)
-            return 0.2 + (stepProgress * 0.4) // 20% to 60%
+            return 0.2 + (stepProgress * 0.25) // 20% to 45%
         case .phase1Complete:
+            return 0.45
+        case .conversationPartners:
             return 0.6
-        case .aiConversation:
-            // Progress within Phase 2 based on conversation completion
-            return conversationComplete ? 0.9 : 0.7
+        case .conversationSituations:
+            // Progress based on partners completed
+            let partnersCount = onboardingData.selectedConversationPartners.count
+            let completedCount = onboardingData.partnerSituations.count
+            let progress = partnersCount > 0 ? Double(completedCount) / Double(partnersCount) : 0
+            return 0.75 + (progress * 0.15) // 75% to 90%
         case .phase2Complete:
-            return 0.95
-        case .courseSelection:
+            return 0.9
+        case .onboardingComplete:
             return 1.0
         }
     }
@@ -105,10 +111,10 @@ class OnboardingViewModel: ObservableObject {
             return "Getting Started"
         case .basicInfo, .phase1Complete:
             return "Phase 1"
-        case .aiConversation, .phase2Complete:
+        case .conversationPartners, .conversationSituations, .phase2Complete:
             return "Phase 2"
-        case .courseSelection:
-            return "Phase 3"
+        case .onboardingComplete:
+            return "Complete"
         }
     }
     
@@ -116,7 +122,6 @@ class OnboardingViewModel: ObservableObject {
     private let navigationCoordinator = NavigationCoordinator.shared
     private let authService = AuthenticationService.shared
     private let mockService = OnboardingMockService.shared
-    private let aiService = AIConversationService()
     private var cancellables = Set<AnyCancellable>()
     
     // MARK: - Initialization
@@ -134,13 +139,11 @@ class OnboardingViewModel: ObservableObject {
     }
     
     func continueFromPhase1Complete() {
-        moveToPhase(.aiConversation)
+        moveToPhase(.conversationPartners)
     }
     
     func continueFromPhase2Complete() {
-        // Show intermission and load courses
-        showIntermission = true
-        loadCourses()
+        moveToPhase(.onboardingComplete)
     }
     
     // MARK: - Phase 1 Methods
@@ -163,7 +166,15 @@ class OnboardingViewModel: ObservableObject {
         searchForMatchingRole()
     }
     
-    func continueFromRoleResult() {
+    func selectRole(_ role: Role) {
+        onboardingData.selectedRole = role
+        onboardingData.didSelectNoMatch = false
+        moveToPhase(.phase1Complete)
+    }
+    
+    func selectNoMatch() {
+        onboardingData.selectedRole = nil
+        onboardingData.didSelectNoMatch = true
         moveToPhase(.phase1Complete)
     }
     
@@ -179,11 +190,11 @@ class OnboardingViewModel: ObservableObject {
                     industry: onboardingData.industry?.rawValue ?? ""
                 )
                 
-                if response.matched, let role = response.role {
-                    onboardingData.matchedRole = role
-                    roleMatchResult = .matched(role)
+                if !response.roles.isEmpty {
+                    onboardingData.matchedRoles = response.roles
+                    roleMatchResult = .matched(response.roles)
                 } else {
-                    onboardingData.matchedRole = nil
+                    onboardingData.matchedRoles = []
                     roleMatchResult = .notMatched
                 }
                 currentBasicInfoStep = .roleResult
@@ -208,80 +219,81 @@ class OnboardingViewModel: ObservableObject {
     }
     
     // MARK: - Phase 2 Methods
-    func sendMessage() {
-        guard !userMessageText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else { return }
-        
-        let userMessage = AIConversationMessage(content: userMessageText, isUser: true)
-        conversationMessages.append(userMessage)
-        onboardingData.conversationMessages = conversationMessages
-        
-        let messageText = userMessageText
-        userMessageText = ""
-        isAITyping = true
-        
-        Task {
-            do {
-                let aiResponse = try await aiService.processUserMessage(messageText, context: onboardingData)
-                let aiMessage = AIConversationMessage(content: aiResponse, isUser: false)
-                conversationMessages.append(aiMessage)
-                onboardingData.conversationMessages = conversationMessages
-                
-                // Check if conversation is complete
-                if aiService.shouldShowContinueButton(messageCount: conversationMessages.count) {
-                    conversationComplete = true
-                }
-            } catch {
-                errorMessage = "Failed to get AI response"
-            }
-            isAITyping = false
+    func togglePartner(_ partner: ConversationPartner) {
+        if selectedPartners.contains(partner) {
+            selectedPartners.remove(partner)
+            onboardingData.selectedConversationPartners.remove(partner)
+            // Remove any existing situations for this partner
+            onboardingData.partnerSituations.removeAll { $0.partner == partner }
+        } else {
+            selectedPartners.insert(partner)
+            onboardingData.selectedConversationPartners.insert(partner)
         }
     }
     
-    func finishConversation() {
-        // Extract needs from conversation
-        onboardingData.identifiedNeeds = aiService.extractNeeds(from: conversationMessages)
+    func continueFromPartnerSelection() {
+        guard !selectedPartners.isEmpty else {
+            errorMessage = "Please select at least one conversation partner"
+            return
+        }
         
-        // Move to Phase 2 complete
-        moveToPhase(.phase2Complete)
+        // Initialize partner situations for selected partners
+        onboardingData.partnerSituations = []
+        onboardingData.currentPartnerIndex = 0
+        
+        // Move to situations selection
+        moveToPhase(.conversationSituations)
+        updateCurrentPartnerSituations()
     }
     
-    // MARK: - Phase 3 Methods
-    private func loadCourses() {
-        Task {
-            // Simulate loading time
-            try await Task.sleep(nanoseconds: 2_000_000_000) // 2 seconds
-            
-            do {
-                let response = try await mockService.recommendCourses(
-                    for: onboardingData.matchedRole?.id,
-                    industry: onboardingData.industry?.rawValue ?? "",
-                    needs: onboardingData.identifiedNeeds
-                )
-                
-                onboardingData.availableCourses = response.courses
-                showIntermission = false
-                moveToPhase(.courseSelection)
-            } catch {
-                errorMessage = "Failed to load courses"
-                showIntermission = false
+    func toggleSituation(_ situation: ConversationSituation) {
+        guard var current = currentPartnerSituations else { return }
+        
+        if current.situations.contains(situation) {
+            current.situations.remove(situation)
+        } else {
+            current.situations.insert(situation)
+        }
+        
+        currentPartnerSituations = current
+    }
+    
+    func continueFromSituationSelection() {
+        guard let current = currentPartnerSituations, !current.situations.isEmpty else {
+            errorMessage = "Please select at least one situation"
+            return
+        }
+        
+        // Save current partner situations
+        if let existingIndex = onboardingData.partnerSituations.firstIndex(where: { $0.partner == current.partner }) {
+            onboardingData.partnerSituations[existingIndex] = current
+        } else {
+            onboardingData.partnerSituations.append(current)
+        }
+        
+        // Move to next partner or complete
+        onboardingData.currentPartnerIndex += 1
+        
+        if onboardingData.currentPartnerIndex < selectedPartners.count {
+            updateCurrentPartnerSituations()
+        } else {
+            // All partners completed
+            moveToPhase(.phase2Complete)
+        }
+    }
+    
+    private func updateCurrentPartnerSituations() {
+        if let currentPartner = onboardingData.currentPartnerForSituations {
+            // Check if we already have situations for this partner
+            if let existing = onboardingData.partnerSituations.first(where: { $0.partner == currentPartner }) {
+                currentPartnerSituations = existing
+            } else {
+                currentPartnerSituations = PartnerSituations(partner: currentPartner)
             }
         }
     }
     
-    func selectCourse(_ course: Course) {
-        onboardingData.selectedCourse = course
-        completeOnboarding()
-    }
-    
-    func acknowledgeNoCourses() {
-        completeOnboarding()
-    }
-    
-    private func completeOnboarding() {
-        showCompletionScreen = true
-    }
-    
-    func finishOnboarding() {
+    func enterFluentpro() {
         // Save onboarding data (would normally persist to backend)
         isOnboardingComplete = true
         navigationCoordinator.navigateToHome()

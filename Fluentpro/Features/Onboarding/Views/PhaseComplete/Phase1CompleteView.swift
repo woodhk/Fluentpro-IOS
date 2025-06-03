@@ -29,7 +29,7 @@ struct Phase1CompleteView: View {
                     .scaleEffect(celebrationScale)
                     .animation(.spring(response: 0.6, dampingFraction: 0.6), value: celebrationScale)
                 
-                Text("Let's now consult with our AI expert to understand your English needs better")
+                Text("Great! Now let's understand your communication context to personalize your learning experience")
                     .font(.body)
                     .foregroundColor(.theme.secondaryText)
                     .multilineTextAlignment(.center)
@@ -80,10 +80,11 @@ struct Phase2CompleteView: View {
                     .scaleEffect(celebrationScale)
                     .animation(.spring(response: 0.6, dampingFraction: 0.6), value: celebrationScale)
                 
-                Text("You're ready to select your courses")
+                Text("Perfect! We now have all the information we need to create your personalized learning journey")
                     .font(.body)
                     .foregroundColor(.theme.secondaryText)
                     .multilineTextAlignment(.center)
+                    .padding(.horizontal, Theme.spacing.medium)
             }
             
             Spacer()
@@ -92,7 +93,7 @@ struct Phase2CompleteView: View {
             Button(action: {
                 viewModel.continueFromPhase2Complete()
             }) {
-                Text("Continue to Course Selection")
+                Text("Continue")
             }
             .buttonStyle(PrimaryButtonStyle())
             .padding(.horizontal)

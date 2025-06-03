@@ -12,10 +12,7 @@ struct OnboardingView: View {
                     .ignoresSafeArea()
                 
                 // Main Content
-                if viewModel.showIntermission {
-                    IntermissionView()
-                } else {
-                    VStack {
+                VStack {
                         // Progress Bar (only show after welcome screens)
                         if viewModel.currentPhase.rawValue >= OnboardingViewModel.OnboardingPhase.basicInfo.rawValue {
                             OnboardingProgressBar(
@@ -37,12 +34,14 @@ struct OnboardingView: View {
                                 Phase1BasicInfoView(viewModel: viewModel)
                             case .phase1Complete:
                                 Phase1CompleteView(viewModel: viewModel)
-                            case .aiConversation:
-                                Phase2ConversationView(viewModel: viewModel)
+                            case .conversationPartners:
+                                ConversationPartnersView(viewModel: viewModel)
+                            case .conversationSituations:
+                                ConversationSituationsView(viewModel: viewModel)
                             case .phase2Complete:
                                 Phase2CompleteView(viewModel: viewModel)
-                            case .courseSelection:
-                                Phase3CourseSelectionView(viewModel: viewModel)
+                            case .onboardingComplete:
+                                OnboardingCompleteView(viewModel: viewModel)
                             }
                         }
                         .transition(.asymmetric(
@@ -50,7 +49,6 @@ struct OnboardingView: View {
                             removal: .move(edge: .leading).combined(with: .opacity)
                         ))
                         .animation(.easeInOut(duration: 0.3), value: viewModel.currentPhase)
-                    }
                 }
             }
             .navigationBarHidden(true)
@@ -104,44 +102,6 @@ struct OnboardingProgressBar: View {
     }
 }
 
-// Intermission/Loading View
-struct IntermissionView: View {
-    @State private var loadingText = "Analyzing your needs"
-    @State private var dotCount = 0
-    
-    var body: some View {
-        VStack(spacing: Theme.spacing.large) {
-            Spacer()
-            
-            // Loading Animation
-            ProgressView()
-                .progressViewStyle(CircularProgressViewStyle(tint: .theme.primary))
-                .scaleEffect(1.5)
-            
-            // Loading Text
-            Text(loadingText + String(repeating: ".", count: dotCount))
-                .font(.headline)
-                .foregroundColor(.theme.primaryText)
-            
-            Text("Finding the perfect courses for you")
-                .font(.subheadline)
-                .foregroundColor(.theme.secondaryText)
-            
-            Spacer()
-        }
-        .onAppear {
-            animateDots()
-        }
-    }
-    
-    private func animateDots() {
-        Timer.scheduledTimer(withTimeInterval: 0.5, repeats: true) { timer in
-            withAnimation {
-                dotCount = (dotCount + 1) % 4
-            }
-        }
-    }
-}
 
 #Preview {
     OnboardingView()

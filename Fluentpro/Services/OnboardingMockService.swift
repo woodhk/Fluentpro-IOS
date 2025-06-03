@@ -16,41 +16,98 @@ class OnboardingMockService {
     
     // MARK: - Mock Data
     private let mockRoles: [Role] = [
+        // Banking & Finance roles
         Role(
-            title: "Software Engineer",
-            description: "Develops and maintains software applications, collaborates with cross-functional teams",
-            industry: "Technology",
-            commonTasks: ["Code reviews", "Technical documentation", "Team meetings", "Client presentations"]
-        ),
-        Role(
-            title: "Product Manager",
-            description: "Manages product lifecycle, coordinates with stakeholders, defines product strategy",
-            industry: "Technology",
-            commonTasks: ["Stakeholder meetings", "Product presentations", "Requirements documentation", "Team coordination"]
+            title: "Investment Banker",
+            description: "Advises clients on financial transactions, manages mergers and acquisitions, prepares financial models",
+            industry: "Banking & Finance",
+            commonTasks: ["Client presentations", "Financial modeling", "Deal negotiations", "Regulatory compliance"]
         ),
         Role(
             title: "Financial Analyst",
             description: "Analyzes financial data, prepares reports, provides investment recommendations",
-            industry: "Finance",
+            industry: "Banking & Finance",
             commonTasks: ["Financial reports", "Client presentations", "Data analysis", "Investment meetings"]
         ),
         Role(
-            title: "Sales Representative",
-            description: "Manages client relationships, negotiates deals, presents products to customers",
-            industry: "Retail",
-            commonTasks: ["Client calls", "Sales presentations", "Negotiation", "Email communication"]
+            title: "Relationship Manager",
+            description: "Manages client portfolios, develops banking relationships, provides financial advice",
+            industry: "Banking & Finance",
+            commonTasks: ["Client meetings", "Portfolio reviews", "Financial advising", "Cross-selling"]
+        ),
+        
+        // Shipping & Logistics roles
+        Role(
+            title: "Logistics Coordinator",
+            description: "Coordinates shipments, manages supply chain operations, liaises with carriers and customers",
+            industry: "Shipping & Logistics",
+            commonTasks: ["Vendor negotiations", "Shipment tracking", "Customer updates", "Problem resolution"]
+        ),
+        Role(
+            title: "Supply Chain Manager",
+            description: "Oversees supply chain operations, optimizes logistics processes, manages vendor relationships",
+            industry: "Shipping & Logistics",
+            commonTasks: ["Strategic planning", "Vendor meetings", "Performance reviews", "Cost negotiations"]
+        ),
+        Role(
+            title: "Freight Forwarder",
+            description: "Arranges cargo transportation, handles customs documentation, coordinates with shipping lines",
+            industry: "Shipping & Logistics",
+            commonTasks: ["Customs clearance", "Rate negotiations", "Client communication", "Documentation"]
+        ),
+        
+        // Real Estate roles
+        Role(
+            title: "Real Estate Agent",
+            description: "Shows properties to clients, negotiates deals, manages property listings",
+            industry: "Real Estate",
+            commonTasks: ["Property showings", "Price negotiations", "Contract discussions", "Market analysis"]
+        ),
+        Role(
+            title: "Property Manager",
+            description: "Manages rental properties, handles tenant relations, oversees maintenance",
+            industry: "Real Estate",
+            commonTasks: ["Tenant communication", "Vendor coordination", "Lease negotiations", "Property inspections"]
+        ),
+        Role(
+            title: "Real Estate Developer",
+            description: "Develops property projects, manages construction, secures financing",
+            industry: "Real Estate",
+            commonTasks: ["Investor presentations", "Contractor meetings", "Permit applications", "Stakeholder updates"]
+        ),
+        
+        // Hotels & Hospitality roles
+        Role(
+            title: "Hotel Manager",
+            description: "Oversees hotel operations, manages staff, ensures guest satisfaction",
+            industry: "Hotels & Hospitality",
+            commonTasks: ["Staff meetings", "Guest relations", "Vendor negotiations", "Performance reviews"]
+        ),
+        Role(
+            title: "Guest Relations Manager",
+            description: "Handles guest concerns, manages VIP services, ensures customer satisfaction",
+            industry: "Hotels & Hospitality",
+            commonTasks: ["Guest communication", "Complaint resolution", "VIP coordination", "Service training"]
+        ),
+        Role(
+            title: "Event Coordinator",
+            description: "Plans and executes events, coordinates with vendors, manages client expectations",
+            industry: "Hotels & Hospitality",
+            commonTasks: ["Client consultations", "Vendor coordination", "Event presentations", "Budget discussions"]
+        ),
+        
+        // Cross-industry roles
+        Role(
+            title: "Sales Manager",
+            description: "Leads sales team, develops sales strategies, manages client relationships",
+            industry: "Any",
+            commonTasks: ["Sales presentations", "Team meetings", "Client negotiations", "Performance reviews"]
         ),
         Role(
             title: "HR Manager",
             description: "Manages human resources, handles recruitment, develops company policies",
             industry: "Any",
             commonTasks: ["Employee interviews", "Policy documentation", "Team meetings", "Conflict resolution"]
-        ),
-        Role(
-            title: "Marketing Specialist",
-            description: "Creates marketing campaigns, analyzes market trends, manages brand communication",
-            industry: "Marketing & Advertising",
-            commonTasks: ["Campaign presentations", "Client meetings", "Content creation", "Team collaboration"]
         )
     ]
     
@@ -161,26 +218,58 @@ class OnboardingMockService {
         // Simulate network delay
         try await Task.sleep(nanoseconds: 1_500_000_000) // 1.5 seconds
         
-        // Simple matching logic
+        // Enhanced matching logic with confidence scores
         let lowercaseTitle = title.lowercased()
-        let matchedRole = mockRoles.first { role in
-            role.title.lowercased().contains(lowercaseTitle) ||
-            lowercaseTitle.contains(role.title.lowercased()) ||
-            role.industry == industry
+        let lowercaseDesc = description.lowercased()
+        
+        // Score each role based on title and description match
+        var scoredRoles: [(role: Role, score: Double)] = []
+        
+        for mockRole in mockRoles {
+            var score: Double = 0
+            
+            // Title matching
+            if mockRole.title.lowercased() == lowercaseTitle {
+                score += 0.5
+            } else if mockRole.title.lowercased().contains(lowercaseTitle) || lowercaseTitle.contains(mockRole.title.lowercased()) {
+                score += 0.3
+            }
+            
+            // Description matching
+            let roleDescWords = mockRole.description.lowercased().split(separator: " ")
+            let userDescWords = lowercaseDesc.split(separator: " ")
+            let commonWords = Set(roleDescWords).intersection(Set(userDescWords))
+            score += Double(commonWords.count) * 0.02
+            
+            // Industry matching
+            if mockRole.industry == industry || mockRole.industry == "Any" {
+                score += 0.2
+            }
+            
+            if score > 0 {
+                scoredRoles.append((mockRole, min(score, 0.95)))
+            }
         }
         
-        if let role = matchedRole {
-            return RoleMatchResponse(
-                matched: true,
-                role: role,
-                confidence: 0.85
-            )
+        // Sort by score and take top matches
+        scoredRoles.sort { $0.score > $1.score }
+        let topMatches = scoredRoles.prefix(3)
+        
+        if topMatches.isEmpty {
+            return RoleMatchResponse(roles: [])
         } else {
-            return RoleMatchResponse(
-                matched: false,
-                role: nil,
-                confidence: nil
-            )
+            // Create roles with confidence scores
+            let matchedRoles = topMatches.map { match in
+                Role(
+                    id: match.role.id,
+                    title: match.role.title,
+                    description: match.role.description,
+                    industry: match.role.industry,
+                    commonTasks: match.role.commonTasks,
+                    confidence: match.score
+                )
+            }
+            return RoleMatchResponse(roles: matchedRoles)
         }
     }
     
@@ -207,61 +296,4 @@ class OnboardingMockService {
         }
     }
     
-    // MARK: - AI Conversation
-    func getAIResponse(for messages: [AIConversationMessage], industry: Industry, role: String) async throws -> String {
-        // Simulate thinking delay
-        try await Task.sleep(nanoseconds: 1_000_000_000) // 1 second
-        
-        let messageCount = messages.filter { !$0.isUser }.count
-        
-        // Generate contextual responses based on conversation stage
-        switch messageCount {
-        case 0:
-            return "Hello! I'm here to understand your English communication needs better. Can you tell me about your typical workday and the types of interactions you have with colleagues or clients?"
-            
-        case 1:
-            return "That's really helpful! Now, regarding \(industry.rawValue), what are the most challenging communication situations you face? For example, are there specific meetings, presentations, or documents you work with?"
-            
-        case 2:
-            return "I see. As a \(role), do you often need to communicate with international teams or clients? What language barriers do you encounter most frequently?"
-            
-        case 3:
-            return "Thank you for sharing that. One more question - what specific business English skills would help you feel more confident in your role? For instance, negotiation, technical writing, or presentation skills?"
-            
-        case 4:
-            return "Perfect! Based on what you've told me, I can see you would benefit from focused training in business communication, especially around \(industry.rawValue)-specific terminology and professional interactions. Let me prepare some course recommendations for you."
-            
-        default:
-            return "Thank you for all this valuable information. I have a clear picture of your needs now. Let's move forward to find the perfect courses for you!"
-        }
-    }
-}
-
-// MARK: - AI Conversation Service
-@MainActor
-class AIConversationService {
-    private let mockService = OnboardingMockService.shared
-    
-    func processUserMessage(_ message: String, context: OnboardingData) async throws -> String {
-        return try await mockService.getAIResponse(
-            for: context.conversationMessages,
-            industry: context.industry ?? .technology,
-            role: context.roleTitle
-        )
-    }
-    
-    func extractNeeds(from messages: [AIConversationMessage]) -> [String] {
-        // Mock extraction of user needs from conversation
-        return [
-            "Professional email writing",
-            "Meeting participation and leadership",
-            "Client presentation skills",
-            "Cross-cultural communication",
-            "Industry-specific terminology"
-        ]
-    }
-    
-    func shouldShowContinueButton(messageCount: Int) -> Bool {
-        return messageCount >= 8 // After 4 exchanges (4 user + 4 AI)
-    }
 }

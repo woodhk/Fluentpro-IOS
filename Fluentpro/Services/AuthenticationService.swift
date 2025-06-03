@@ -8,44 +8,6 @@
 import Foundation
 import Combine
 
-// MARK: - Authentication Models
-struct Auth0CallbackRequest: Encodable {
-    let code: String
-    let state: String?
-}
-
-struct AuthResponse: Decodable {
-    let accessToken: String
-    let refreshToken: String?
-    let tokenType: String
-    let expiresIn: Int
-    let user: User
-    
-    enum CodingKeys: String, CodingKey {
-        case accessToken = "access_token"
-        case refreshToken = "refresh_token"
-        case tokenType = "token_type"
-        case expiresIn = "expires_in"
-        case user
-    }
-}
-
-struct RefreshTokenRequest: Encodable {
-    let refreshToken: String
-}
-
-struct RefreshTokenResponse: Decodable {
-    let accessToken: String
-    let tokenType: String
-    let expiresIn: Int
-    
-    enum CodingKeys: String, CodingKey {
-        case accessToken = "access_token"
-        case tokenType = "token_type"
-        case expiresIn = "expires_in"
-    }
-}
-
 // MARK: - Authentication Service
 class AuthenticationService: ObservableObject {
     static let shared = AuthenticationService()
@@ -67,6 +29,9 @@ class AuthenticationService: ObservableObject {
     
     /// Login with email and password
     func login(email: String, password: String) async throws -> User {
+        print("🔐 [AUTH] Login attempt for: \(email)")
+        print("🔐 [AUTH] Login endpoint: \(APIEndpoints.login.url?.absoluteString ?? "nil")")
+        
         let loginRequest = LoginRequest(email: email, password: password)
         
         do {
@@ -76,10 +41,14 @@ class AuthenticationService: ObservableObject {
                 responseType: AuthResponse.self
             )
             
+            print("🔐 [AUTH] Response received")
+            print("🔐 [AUTH] Token stored: \(response.accessToken.prefix(20))...")
+            print("🔐 [AUTH] User ID: \(response.user.id)")
+            
             // Store tokens
             networkService.setAuthToken(response.accessToken)
-            if let refreshToken = response.refreshToken {
-                try saveRefreshToken(refreshToken)
+            if !response.refreshToken.isEmpty {
+                try saveRefreshToken(response.refreshToken)
             }
             
             // Update current user
@@ -99,8 +68,8 @@ class AuthenticationService: ObservableObject {
                 if let data = data {
                     let decoder = JSONDecoder()
                     decoder.keyDecodingStrategy = .convertFromSnakeCase
-                    if let errorResponse = try? decoder.decode(NetworkService.ErrorResponse.self, from: data),
-                       let message = errorResponse.message {
+                    if let errorResponse = try? decoder.decode(APIErrorResponse.self, from: data) {
+                        let message = errorResponse.error ?? errorResponse.details ?? "Login failed"
                         throw AuthenticationError.loginFailedWithMessage(message)
                     } else {
                         throw AuthenticationError.loginFailedWithMessage("Login failed")
@@ -117,6 +86,8 @@ class AuthenticationService: ObservableObject {
     
     /// Sign up with email and password
     func signUp(fullName: String, email: String, password: String, dateOfBirth: Date) async throws -> User {
+        print("🔐 [AUTH] Sign up attempt for: \(email)")
+        print("🔐 [AUTH] Sign up endpoint: \(APIEndpoints.signup.url?.absoluteString ?? "nil")")
         // Clear any existing auth state before signup
         networkService.clearAuthToken()
         deleteRefreshToken()
@@ -141,10 +112,14 @@ class AuthenticationService: ObservableObject {
                 responseType: AuthResponse.self
             )
             
+            print("🔐 [AUTH] Sign up successful")
+            print("🔐 [AUTH] New user ID: \(response.user.id)")
+            print("🔐 [AUTH] Token received: \(response.accessToken.prefix(20))...")
+            
             // Store tokens
             networkService.setAuthToken(response.accessToken)
-            if let refreshToken = response.refreshToken {
-                try saveRefreshToken(refreshToken)
+            if !response.refreshToken.isEmpty {
+                try saveRefreshToken(response.refreshToken)
             }
             
             // Update current user
@@ -153,6 +128,26 @@ class AuthenticationService: ObservableObject {
             }
             
             return response.user
+        } catch let error as NetworkError {
+            switch error {
+            case .httpError(let statusCode, let data):
+                if statusCode == 409 {
+                    // User already exists
+                    throw AuthenticationError.loginFailedWithMessage("An account with this email already exists")
+                }
+                // Try to parse error message from response
+                if let data = data {
+                    let decoder = JSONDecoder()
+                    decoder.keyDecodingStrategy = .convertFromSnakeCase
+                    if let errorResponse = try? decoder.decode(APIErrorResponse.self, from: data) {
+                        let message = errorResponse.error ?? errorResponse.details ?? "Sign up failed"
+                        throw AuthenticationError.loginFailedWithMessage(message)
+                    }
+                }
+            default:
+                break
+            }
+            throw AuthenticationError.signUpFailed(error)
         } catch {
             throw AuthenticationError.signUpFailed(error)
         }
@@ -171,8 +166,8 @@ class AuthenticationService: ObservableObject {
             
             // Store tokens
             networkService.setAuthToken(response.accessToken)
-            if let refreshToken = response.refreshToken {
-                try saveRefreshToken(refreshToken)
+            if !response.refreshToken.isEmpty {
+                try saveRefreshToken(response.refreshToken)
             }
             
             // Update current user
@@ -243,13 +238,10 @@ class AuthenticationService: ObservableObject {
         // Try to refresh the token and get user info
         do {
             try await refreshToken()
-            // Get user profile
-            let user = try await networkService.get(
-                endpoint: .userProfile,
-                responseType: User.self
-            )
+            // Get user profile - just get basic user info for now
+            let profile = try await getUserProfile()
             await MainActor.run {
-                self.currentUser = user
+                self.currentUser = profile.user
             }
         } catch {
             // If refresh fails, clear authentication
@@ -262,6 +254,14 @@ class AuthenticationService: ObservableObject {
     /// Get current access token
     func getAccessToken() -> String? {
         return networkService.getAuthToken()
+    }
+    
+    /// Get user profile with onboarding status
+    func getUserProfile() async throws -> UserProfile {
+        return try await networkService.get(
+            endpoint: .userProfile,
+            responseType: UserProfile.self
+        )
     }
     
     // MARK: - Private Methods

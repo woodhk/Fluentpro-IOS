@@ -58,13 +58,42 @@ class NavigationCoordinator: ObservableObject {
     
     // MARK: - Authentication Methods
     func handleSuccessfulLogin() {
-        print("🏠 handleSuccessfulLogin called - navigating to home")
-        navigateToHome()
+        print("🏠 handleSuccessfulLogin called - checking onboarding status")
+        Task {
+            await checkOnboardingStatusAndNavigate()
+        }
     }
     
     func handleSuccessfulSignUp() {
         print("🎊 handleSuccessfulSignUp called - navigating to onboarding")
         navigateToOnboarding()
+    }
+    
+    func checkOnboardingStatusAndNavigate() async {
+        do {
+            let profile = try await authService.getUserProfile()
+            print("📊 [NAVIGATION] User onboarding status: \(profile.onboardingStatus)")
+            
+            await MainActor.run {
+                switch profile.onboardingStatus {
+                case "completed":
+                    print("✅ [NAVIGATION] Onboarding completed - navigating to home")
+                    navigateToHome()
+                case "pending", "welcome", "basic_info", "personalisation", "course_assignment":
+                    print("🎯 [NAVIGATION] Onboarding incomplete - navigating to onboarding")
+                    navigateToOnboarding()
+                default:
+                    print("❓ [NAVIGATION] Unknown onboarding status - navigating to onboarding")
+                    navigateToOnboarding()
+                }
+            }
+        } catch {
+            print("❌ [NAVIGATION] Failed to get user profile: \(error)")
+            // If we can't get the profile, navigate to home as fallback
+            await MainActor.run {
+                navigateToHome()
+            }
+        }
     }
     
     func handleLogout() {

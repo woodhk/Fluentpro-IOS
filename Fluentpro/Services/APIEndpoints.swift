@@ -23,6 +23,29 @@ enum APIEndpoints {
     case userProfile
     case updateProfile
     
+    // MARK: - Role Management Endpoints
+    case jobInput
+    case roleSelection(roleId: String)
+    case createCustomRole
+    
+    // MARK: - Onboarding Endpoints
+    // Phase 1
+    case setLanguage
+    case getLanguages
+    case setIndustry
+    case getIndustries
+    
+    // Phase 2
+    case getCommunicationPartners
+    case selectCommunicationPartners
+    case getUserPartners
+    case getPartnerUnits(partnerId: String)
+    case selectPartnerUnits(partnerId: String)
+    case getUserPartnerUnits(partnerId: String)
+    
+    // Summary
+    case getOnboardingSummary
+    
     // MARK: - Other Endpoints (add as needed)
     case lessons
     case lessonDetail(id: String)
@@ -41,13 +64,49 @@ enum APIEndpoints {
         case .logout:
             return "/auth/logout/"
         case .auth0Callback:
-            return "/auth/auth0/callback"
+            return "/auth/callback/"
             
         // User
         case .userProfile:
-            return "/auth/profile/"
+            return "/user/profile/"
         case .updateProfile:
-            return "/auth/profile/"
+            return "/user/profile/"
+            
+        // Role Management
+        case .jobInput:
+            return "/roles/job-input/"
+        case .roleSelection(let roleId):
+            return "/roles/role-selection/"
+        case .createCustomRole:
+            return "/roles/new-role/"
+            
+        // Onboarding - Phase 1
+        case .setLanguage:
+            return "/onboarding/set-language/"
+        case .getLanguages:
+            return "/onboarding/languages/"
+        case .setIndustry:
+            return "/onboarding/set-industry/"
+        case .getIndustries:
+            return "/onboarding/industries/"
+            
+        // Onboarding - Phase 2
+        case .getCommunicationPartners:
+            return "/onboarding/communication-partners/"
+        case .selectCommunicationPartners:
+            return "/onboarding/select-partners/"
+        case .getUserPartners:
+            return "/onboarding/user-partners/"
+        case .getPartnerUnits(let partnerId):
+            return "/onboarding/partner/\(partnerId)/units/"
+        case .selectPartnerUnits(let partnerId):
+            return "/onboarding/partner/\(partnerId)/select-units/"
+        case .getUserPartnerUnits(let partnerId):
+            return "/onboarding/partner/\(partnerId)/user-units/"
+            
+        // Onboarding - Summary
+        case .getOnboardingSummary:
+            return "/onboarding/summary/"
             
         // Other endpoints
         case .lessons:
@@ -72,7 +131,18 @@ enum APIEndpoints {
         case .userProfile, .lessons, .lessonDetail, .progress:
             return "GET"
         case .updateProfile:
-            return "PUT"
+            return "PATCH"
+            
+        // Role Management
+        case .jobInput, .roleSelection, .createCustomRole:
+            return "POST"
+            
+        // Onboarding
+        case .setLanguage, .setIndustry, .selectCommunicationPartners, .selectPartnerUnits:
+            return "POST"
+        case .getLanguages, .getIndustries, .getCommunicationPartners, .getUserPartners,
+             .getPartnerUnits, .getUserPartnerUnits, .getOnboardingSummary:
+            return "GET"
         }
     }
     
@@ -85,7 +155,12 @@ enum APIEndpoints {
         
         // Add additional headers based on endpoint if needed
         switch self {
-        case .refreshToken, .logout, .userProfile, .updateProfile, .lessons, .lessonDetail, .progress:
+        case .refreshToken, .logout, .userProfile, .updateProfile, .lessons, .lessonDetail, .progress,
+             .jobInput, .roleSelection, .createCustomRole,
+             .setLanguage, .setIndustry, .getLanguages, .getIndustries,
+             .getCommunicationPartners, .selectCommunicationPartners, .getUserPartners,
+             .getPartnerUnits, .selectPartnerUnits, .getUserPartnerUnits,
+             .getOnboardingSummary:
             // These endpoints require authentication
             // Token will be added by NetworkService
             break

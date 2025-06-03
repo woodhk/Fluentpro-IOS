@@ -9,20 +9,38 @@ import Foundation
 
 // MARK: - Language
 enum Language: String, CaseIterable, Identifiable, Codable {
-    case english = "English"
-    case spanish = "Spanish"
-    case french = "French"
-    case german = "German"
-    case italian = "Italian"
-    case portuguese = "Portuguese"
-    case russian = "Russian"
-    case chinese = "Chinese"
-    case japanese = "Japanese"
-    case korean = "Korean"
-    case arabic = "Arabic"
-    case hindi = "Hindi"
+    case english = "english"
+    case spanish = "spanish"
+    case french = "french"
+    case german = "german"
+    case italian = "italian"
+    case portuguese = "portuguese"
+    case russian = "russian"
+    case chinese = "chinese"
+    case japanese = "japanese"
+    case korean = "korean"
+    case arabic = "arabic"
+    case hindi = "hindi"
     
     var id: String { rawValue }
+    
+    // Display name for UI
+    var displayName: String {
+        switch self {
+        case .english: return "English"
+        case .spanish: return "Spanish"
+        case .french: return "French"
+        case .german: return "German"
+        case .italian: return "Italian"
+        case .portuguese: return "Portuguese"
+        case .russian: return "Russian"
+        case .chinese: return "Chinese"
+        case .japanese: return "Japanese"
+        case .korean: return "Korean"
+        case .arabic: return "Arabic"
+        case .hindi: return "Hindi"
+        }
+    }
 }
 
 // MARK: - Industry
@@ -198,9 +216,6 @@ struct RoleMatchRequest: Codable {
     let industry: String
 }
 
-struct RoleMatchResponse: Codable {
-    let roles: [Role] // Multiple roles with confidence scores
-}
 
 struct CourseRecommendationRequest: Codable {
     let roleId: String?

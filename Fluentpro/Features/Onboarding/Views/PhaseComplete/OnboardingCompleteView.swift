@@ -56,7 +56,7 @@ struct OnboardingCompleteView: View {
                     // Summary of collected data
                     VStack(alignment: .leading, spacing: Theme.spacing.medium) {
                         if let language = viewModel.onboardingData.nativeLanguage {
-                            SummaryRow(icon: "globe", label: "Native Language", value: language.rawValue)
+                            SummaryRow(icon: "globe", label: "Native Language", value: language.displayName)
                         }
                         
                         if let industry = viewModel.onboardingData.industry {

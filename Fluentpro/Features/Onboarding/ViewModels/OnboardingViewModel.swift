@@ -121,7 +121,7 @@ class OnboardingViewModel: ObservableObject {
     // MARK: - Private Properties
     private let navigationCoordinator = NavigationCoordinator.shared
     private let authService = AuthenticationService.shared
-    private let mockService = OnboardingMockService.shared
+    private let networkService = NetworkService.shared
     private var cancellables = Set<AnyCancellable>()
     
     // MARK: - Initialization
@@ -136,6 +136,10 @@ class OnboardingViewModel: ObservableObject {
     
     func continueFromIntro() {
         moveToPhase(.basicInfo)
+        // Load industries when entering basic info phase
+        Task {
+            await loadIndustries()
+        }
     }
     
     func continueFromPhase1Complete() {
@@ -148,13 +152,119 @@ class OnboardingViewModel: ObservableObject {
     
     // MARK: - Phase 1 Methods
     func selectLanguage(_ language: Language) {
-        onboardingData.nativeLanguage = language
-        nextBasicInfoStep()
+        print("🎯 [ONBOARDING] Language selected: \(language.displayName) (sending: \(language.rawValue))")
+        
+        isLoading = true
+        errorMessage = ""
+        
+        Task {
+            do {
+                let request = SetLanguageRequest(nativeLanguage: language.rawValue)
+                let _: EmptyOnboardingResponse = try await networkService.post(
+                    endpoint: .setLanguage,
+                    body: request,
+                    responseType: EmptyOnboardingResponse.self
+                )
+                
+                print("✅ [ONBOARDING] Language saved successfully")
+                onboardingData.nativeLanguage = language
+                nextBasicInfoStep()
+            } catch {
+                print("❌ [ONBOARDING] Failed to save language: \(error)")
+                errorMessage = "Failed to save language selection: \(error.localizedDescription)"
+            }
+            isLoading = false
+        }
+    }
+    
+    // MARK: - Industry Management
+    @Published var availableIndustries: [APIIndustry] = []
+    
+    func loadIndustries() async {
+        print("🏭 [ONBOARDING] Loading industries from backend...")
+        
+        do {
+            let response: IndustriesResponse = try await networkService.get(
+                endpoint: .getIndustries,
+                responseType: IndustriesResponse.self
+            )
+            
+            await MainActor.run {
+                self.availableIndustries = response.industries
+            }
+            print("✅ [ONBOARDING] Loaded \(response.industries.count) industries from backend:")
+            for industry in response.industries {
+                print("   - \(industry.name) (ID: \(industry.id))")
+            }
+        } catch {
+            print("❌ [ONBOARDING] Failed to load industries from backend: \(error)")
+            print("🔄 [ONBOARDING] Using fallback default industries")
+            // Fall back to default industries if backend fails
+            await MainActor.run {
+                self.availableIndustries = createDefaultIndustries()
+                print("📝 [ONBOARDING] Created \(self.availableIndustries.count) fallback industries:")
+                for industry in self.availableIndustries {
+                    print("   - \(industry.name) (ID: \(industry.id))")
+                }
+            }
+        }
+    }
+    
+    private func createDefaultIndustries() -> [APIIndustry] {
+        return [
+            APIIndustry(id: UUID().uuidString, name: "Banking & Finance", description: "Financial services and banking", isActive: true, sortOrder: 1),
+            APIIndustry(id: UUID().uuidString, name: "Shipping & Logistics", description: "Transportation and logistics", isActive: true, sortOrder: 2),
+            APIIndustry(id: UUID().uuidString, name: "Real Estate", description: "Property and real estate", isActive: true, sortOrder: 3),
+            APIIndustry(id: UUID().uuidString, name: "Hotels & Hospitality", description: "Hospitality and tourism", isActive: true, sortOrder: 4)
+        ]
     }
     
     func selectIndustry(_ industry: Industry) {
-        onboardingData.industry = industry
-        nextBasicInfoStep()
+        print("🎯 [ONBOARDING] Industry selected: \(industry.rawValue)")
+        
+        // Send the industry name directly to the backend
+        print("🎯 [ONBOARDING] Sending industry name: \(industry.rawValue)")
+        saveIndustryWithName(industry.rawValue, industry: industry)
+    }
+    
+    private func getHardcodedIndustryId(_ industry: Industry) -> String {
+        // These might need to be updated to match actual UUIDs in the backend database
+        // This is a temporary solution until the backend industries endpoint is available
+        switch industry {
+        case .bankingFinance:
+            return "11111111-1111-1111-1111-111111111111" // Banking & Finance
+        case .shippingLogistics:
+            return "22222222-2222-2222-2222-222222222222" // Shipping & Logistics
+        case .realEstate:
+            return "33333333-3333-3333-3333-333333333333" // Real Estate
+        case .hotelsHospitality:
+            return "44444444-4444-4444-4444-444444444444" // Hotels & Hospitality
+        }
+    }
+    
+    private func saveIndustryWithName(_ industryName: String, industry: Industry) {
+        isLoading = true
+        errorMessage = ""
+        
+        Task {
+            do {
+                let request = SetIndustryRequest(industryName: industryName)
+                
+                let _: EmptyOnboardingResponse = try await networkService.post(
+                    endpoint: .setIndustry,
+                    body: request,
+                    responseType: EmptyOnboardingResponse.self
+                )
+                
+                print("✅ [ONBOARDING] Industry saved successfully")
+                onboardingData.industry = industry
+                nextBasicInfoStep()
+            } catch {
+                print("❌ [ONBOARDING] Failed to save industry: \(error)")
+                errorMessage = "Failed to save industry selection: \(error.localizedDescription)"
+            }
+            isLoading = false
+        }
     }
     
     func submitRole() {
@@ -167,32 +277,101 @@ class OnboardingViewModel: ObservableObject {
     }
     
     func selectRole(_ role: Role) {
-        onboardingData.selectedRole = role
-        onboardingData.didSelectNoMatch = false
-        moveToPhase(.phase1Complete)
+        print("🎯 [ONBOARDING] Role selected: \(role.title)")
+        
+        isLoading = true
+        errorMessage = ""
+        
+        Task {
+            do {
+                let request = RoleSelectionRequest(roleId: role.id)
+                let _: EmptyOnboardingResponse = try await networkService.post(
+                    endpoint: .roleSelection(roleId: role.id),
+                    body: request,
+                    responseType: EmptyOnboardingResponse.self
+                )
+                
+                print("✅ [ONBOARDING] Role selection saved successfully")
+                onboardingData.selectedRole = role
+                onboardingData.didSelectNoMatch = false
+                moveToPhase(.phase1Complete)
+            } catch {
+                print("❌ [ONBOARDING] Failed to save role selection: \(error)")
+                errorMessage = "Failed to save role selection: \(error.localizedDescription)"
+            }
+            isLoading = false
+        }
     }
     
     func selectNoMatch() {
-        onboardingData.selectedRole = nil
-        onboardingData.didSelectNoMatch = true
-        moveToPhase(.phase1Complete)
+        print("🎯 [ONBOARDING] User selected no match - creating custom role")
+        
+        isLoading = true
+        errorMessage = ""
+        
+        Task {
+            do {
+                let request = CreateCustomRoleRequest(
+                    jobTitle: onboardingData.roleTitle,
+                    jobDescription: onboardingData.roleDescription,
+                    hierarchyLevel: "associate" // Default level
+                )
+                
+                let _: EmptyOnboardingResponse = try await networkService.post(
+                    endpoint: .createCustomRole,
+                    body: request,
+                    responseType: EmptyOnboardingResponse.self
+                )
+                
+                print("✅ [ONBOARDING] Custom role created successfully")
+                onboardingData.selectedRole = nil
+                onboardingData.didSelectNoMatch = true
+                moveToPhase(.phase1Complete)
+            } catch {
+                print("❌ [ONBOARDING] Failed to create custom role: \(error)")
+                errorMessage = "Failed to create custom role: \(error.localizedDescription)"
+            }
+            isLoading = false
+        }
     }
     
     private func searchForMatchingRole() {
         roleSearchInProgress = true
         errorMessage = ""
         
+        print("🎯 [ONBOARDING] Searching for role matches")
+        print("🎯 [ONBOARDING] Job title: \(onboardingData.roleTitle)")
+        print("🎯 [ONBOARDING] Job description: \(onboardingData.roleDescription)")
+        
         Task {
             do {
-                let response = try await mockService.matchRole(
-                    title: onboardingData.roleTitle,
-                    description: onboardingData.roleDescription,
-                    industry: onboardingData.industry?.rawValue ?? ""
+                let request = JobInputRequest(
+                    jobTitle: onboardingData.roleTitle,
+                    jobDescription: onboardingData.roleDescription
                 )
                 
-                if !response.roles.isEmpty {
-                    onboardingData.matchedRoles = response.roles
-                    roleMatchResult = .matched(response.roles)
+                let response: RoleMatchResponse = try await networkService.post(
+                    endpoint: .jobInput,
+                    body: request,
+                    responseType: RoleMatchResponse.self
+                )
+                
+                print("🎯 [ONBOARDING] API Response: \(response.totalMatches) matches found")
+                
+                if !response.matches.isEmpty {
+                    // Convert API roles to local Role model
+                    let roles = response.matches.map { match in
+                        Role(
+                            id: match.role.id,
+                            title: match.role.title,
+                            description: match.role.description,
+                            industry: match.role.industryName ?? "Unknown",
+                            commonTasks: [],
+                            confidence: match.relevanceScore
+                        )
+                    }
+                    onboardingData.matchedRoles = roles
+                    roleMatchResult = .matched(roles)
                 } else {
                     onboardingData.matchedRoles = []
                     roleMatchResult = .notMatched
@@ -237,13 +416,66 @@ class OnboardingViewModel: ObservableObject {
             return
         }
         
-        // Initialize partner situations for selected partners
-        onboardingData.partnerSituations = []
-        onboardingData.currentPartnerIndex = 0
+        print("🎯 [ONBOARDING] Saving partner selections: \(selectedPartners.map { $0.rawValue })")
         
-        // Move to situations selection
-        moveToPhase(.conversationSituations)
-        updateCurrentPartnerSituations()
+        isLoading = true
+        errorMessage = ""
+        
+        Task {
+            do {
+                // Map ConversationPartner enum to API format
+                let partnerSelections = selectedPartners.enumerated().map { index, partner in
+                    PartnerSelection(
+                        communicationPartnerId: mapPartnerToId(partner),
+                        priority: index + 1
+                    )
+                }
+                
+                let request = SelectPartnersRequest(partnerSelections: partnerSelections)
+                
+                let _: EmptyOnboardingResponse = try await networkService.post(
+                    endpoint: .selectCommunicationPartners,
+                    body: request,
+                    responseType: EmptyOnboardingResponse.self
+                )
+                
+                print("✅ [ONBOARDING] Partner selections saved successfully")
+                
+                // Initialize partner situations for selected partners
+                onboardingData.partnerSituations = []
+                onboardingData.currentPartnerIndex = 0
+                
+                // Move to situations selection
+                moveToPhase(.conversationSituations)
+                updateCurrentPartnerSituations()
+            } catch {
+                print("❌ [ONBOARDING] Failed to save partner selections: \(error)")
+                errorMessage = "Failed to save partner selections: \(error.localizedDescription)"
+            }
+            isLoading = false
+        }
+    }
+    
+    private func mapPartnerToId(_ partner: ConversationPartner) -> String {
+        // Map enum to backend IDs - this would normally come from fetching partners
+        switch partner {
+        case .clients:
+            return "clients"
+        case .customers:
+            return "customers"
+        case .colleagues:
+            return "colleagues"
+        case .suppliers:
+            return "suppliers"
+        case .partners:
+            return "partners"
+        case .seniorManagement:
+            return "senior-management"
+        case .stakeholders:
+            return "stakeholders"
+        case .other:
+            return "other"
+        }
     }
     
     func toggleSituation(_ situation: ConversationSituation) {
@@ -264,21 +496,90 @@ class OnboardingViewModel: ObservableObject {
             return
         }
         
-        // Save current partner situations
-        if let existingIndex = onboardingData.partnerSituations.firstIndex(where: { $0.partner == current.partner }) {
-            onboardingData.partnerSituations[existingIndex] = current
-        } else {
-            onboardingData.partnerSituations.append(current)
+        print("🎯 [ONBOARDING] Saving situations for partner: \(current.partner.rawValue)")
+        print("🎯 [ONBOARDING] Selected situations: \(current.situations.map { $0.rawValue })")
+        
+        isLoading = true
+        errorMessage = ""
+        
+        Task {
+            do {
+                // Map ConversationSituation enum to API format
+                let unitSelections = current.situations.enumerated().map { index, situation in
+                    UnitSelection(
+                        unitId: mapSituationToId(situation),
+                        priority: index + 1
+                    )
+                }
+                
+                let request = SelectUnitsRequest(unitSelections: unitSelections)
+                let partnerId = mapPartnerToId(current.partner)
+                
+                let _: EmptyOnboardingResponse = try await networkService.post(
+                    endpoint: .selectPartnerUnits(partnerId: partnerId),
+                    body: request,
+                    responseType: EmptyOnboardingResponse.self
+                )
+                
+                print("✅ [ONBOARDING] Partner situations saved successfully")
+                
+                // Save current partner situations locally
+                if let existingIndex = onboardingData.partnerSituations.firstIndex(where: { $0.partner == current.partner }) {
+                    onboardingData.partnerSituations[existingIndex] = current
+                } else {
+                    onboardingData.partnerSituations.append(current)
+                }
+                
+                // Move to next partner or complete
+                onboardingData.currentPartnerIndex += 1
+                
+                if onboardingData.currentPartnerIndex < selectedPartners.count {
+                    updateCurrentPartnerSituations()
+                } else {
+                    // All partners completed
+                    moveToPhase(.phase2Complete)
+                }
+            } catch {
+                print("❌ [ONBOARDING] Failed to save partner situations: \(error)")
+                errorMessage = "Failed to save situations: \(error.localizedDescription)"
+            }
+            isLoading = false
         }
-        
-        // Move to next partner or complete
-        onboardingData.currentPartnerIndex += 1
-        
-        if onboardingData.currentPartnerIndex < selectedPartners.count {
-            updateCurrentPartnerSituations()
-        } else {
-            // All partners completed
-            moveToPhase(.phase2Complete)
+    }
+    
+    private func mapSituationToId(_ situation: ConversationSituation) -> String {
+        // Map enum to backend IDs
+        switch situation {
+        case .interviews:
+            return "interviews"
+        case .conflictResolution:
+            return "conflict-resolution"
+        case .phoneCalls:
+            return "phone-calls"
+        case .oneOnOnes:
+            return "one-on-ones"
+        case .feedbackSessions:
+            return "feedback-sessions"
+        case .teamDiscussions:
+            return "team-discussions"
+        case .negotiations:
+            return "negotiations"
+        case .statusUpdates:
+            return "status-updates"
+        case .informalChats:
+            return "informal-chats"
+        case .briefings:
+            return "briefings"
+        case .meetings:
+            return "meetings"
+        case .presentations:
+            return "presentations"
+        case .trainingSessions:
+            return "training-sessions"
+        case .clientConversations:
+            return "client-conversations"
+        case .videoConferences:
+            return "video-conferences"
         }
     }
     

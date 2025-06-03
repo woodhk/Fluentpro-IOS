@@ -59,7 +59,7 @@ struct LanguageCard: View {
                 Text(language.flag)
                     .font(.system(size: 40))
                 
-                Text(language.rawValue)
+                Text(language.displayName)
                     .font(.headline)
                     .foregroundColor(isSelected ? .white : .theme.primaryText)
             }

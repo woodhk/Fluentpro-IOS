@@ -15,6 +15,7 @@ enum APIEndpoints {
     // MARK: - Authentication Endpoints
     case login
     case signup
+
     case refreshToken
     case logout
     case auth0Callback

@@ -191,6 +191,15 @@ struct SelectPartnersRequest: Codable {
     }
 }
 
+// Simple request to match backend expectation
+struct SimplePartnerSelectionRequest: Codable {
+    let partnerIds: [String]
+    
+    enum CodingKeys: String, CodingKey {
+        case partnerIds = "partner_ids"
+    }
+}
+
 struct UserPartner: Codable {
     let id: String
     let communicationPartner: CommunicationPartner

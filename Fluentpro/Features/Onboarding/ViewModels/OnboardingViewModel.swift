@@ -127,6 +127,10 @@ class OnboardingViewModel: ObservableObject {
     // MARK: - Initialization
     init() {
         setupSubscriptions()
+        // Set initial phase based on user's onboarding status
+        Task {
+            await setInitialPhaseFromBackend()
+        }
     }
     
     // MARK: - Welcome/Intro Methods
@@ -423,15 +427,11 @@ class OnboardingViewModel: ObservableObject {
         
         Task {
             do {
-                // Map ConversationPartner enum to API format
-                let partnerSelections = selectedPartners.enumerated().map { index, partner in
-                    PartnerSelection(
-                        communicationPartnerId: mapPartnerToId(partner),
-                        priority: index + 1
-                    )
-                }
+                // Map ConversationPartner enum to simple partner ID array for backend
+                let partnerIds = selectedPartners.map { mapPartnerToId($0) }
                 
-                let request = SelectPartnersRequest(partnerSelections: partnerSelections)
+                // Create simple request struct to match backend expectation
+                let request = SimplePartnerSelectionRequest(partnerIds: partnerIds)
                 
                 let _: EmptyOnboardingResponse = try await networkService.post(
                     endpoint: .selectCommunicationPartners,
@@ -623,6 +623,48 @@ class OnboardingViewModel: ObservableObject {
     // MARK: - Private Methods
     private func setupSubscriptions() {
         // Any Combine subscriptions needed
+    }
+    
+    private func setInitialPhaseFromBackend() async {
+        do {
+            let profile = try await authService.getUserProfile()
+            print("📊 [ONBOARDING] User onboarding status from backend: \(profile.onboardingStatus)")
+            
+            await MainActor.run {
+                switch profile.onboardingStatus {
+                case "pending", "welcome":
+                    currentPhase = .welcome
+                case "basic_info":
+                    currentPhase = .basicInfo
+                    // Load industries if going to basic info
+                    Task {
+                        await loadIndustries()
+                    }
+                case "personalisation":
+                    // User has completed Phase 1, should be in Phase 2 (partner selection)
+                    currentPhase = .conversationPartners
+                    print("🎯 [ONBOARDING] User in personalisation phase - starting Phase 2 partner selection")
+                case "course_assignment":
+                    // User has selected partners, should be in situations selection
+                    currentPhase = .conversationSituations
+                    print("🎯 [ONBOARDING] User in course_assignment phase - starting situations selection")
+                case "completed":
+                    // Should not reach here as navigation would go to home
+                    currentPhase = .onboardingComplete
+                default:
+                    // Default to welcome for unknown statuses
+                    currentPhase = .welcome
+                    print("❓ [ONBOARDING] Unknown status '\(profile.onboardingStatus)' - defaulting to welcome")
+                }
+                print("✅ [ONBOARDING] Initial phase set to: \(currentPhase)")
+            }
+        } catch {
+            print("❌ [ONBOARDING] Failed to get user profile for phase initialization: \(error)")
+            // Default to welcome phase if we can't get backend status
+            await MainActor.run {
+                currentPhase = .welcome
+            }
+        }
     }
 }
 

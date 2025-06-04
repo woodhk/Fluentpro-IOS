@@ -473,8 +473,6 @@ class OnboardingViewModel: ObservableObject {
             return "senior-management"
         case .stakeholders:
             return "stakeholders"
-        case .other:
-            return "other"
         }
     }
     
@@ -630,6 +628,11 @@ class OnboardingViewModel: ObservableObject {
             let profile = try await authService.getUserProfile()
             print("📊 [ONBOARDING] User onboarding status from backend: \(profile.onboardingStatus)")
             
+            // Load onboarding summary data if user has any progress (including completed)
+            if profile.onboardingStatus != "pending" && profile.onboardingStatus != "welcome" {
+                await loadOnboardingSummaryData()
+            }
+            
             await MainActor.run {
                 switch profile.onboardingStatus {
                 case "pending", "welcome":
@@ -649,8 +652,9 @@ class OnboardingViewModel: ObservableObject {
                     currentPhase = .conversationSituations
                     print("🎯 [ONBOARDING] User in course_assignment phase - starting situations selection")
                 case "completed":
-                    // Should not reach here as navigation would go to home
+                    // User has completed onboarding, show summary
                     currentPhase = .onboardingComplete
+                    print("🎯 [ONBOARDING] User has completed onboarding - showing summary")
                 default:
                     // Default to welcome for unknown statuses
                     currentPhase = .welcome
@@ -664,6 +668,118 @@ class OnboardingViewModel: ObservableObject {
             await MainActor.run {
                 currentPhase = .welcome
             }
+        }
+    }
+    
+    private func loadOnboardingSummaryData() async {
+        print("📋 [ONBOARDING] Loading onboarding summary data from backend...")
+        
+        do {
+            // First try to get the summary from the dedicated endpoint
+            let summaryResponse: OnboardingAPIResponse<OnboardingSummary> = try await networkService.get(
+                endpoint: .getOnboardingSummary,
+                responseType: OnboardingAPIResponse<OnboardingSummary>.self
+            )
+            
+            guard let summary = summaryResponse.data else {
+                print("❌ [ONBOARDING] No summary data in response")
+                // If no summary data, try to get basic info from user profile
+                await loadBasicInfoFromProfile()
+                return
+            }
+            
+            await MainActor.run {
+                // Populate Phase 1 data
+                if let languageCode = summary.selectedLanguage {
+                    onboardingData.nativeLanguage = Language.allCases.first { $0.rawValue == languageCode }
+                }
+                
+                if let industry = summary.selectedIndustry {
+                    onboardingData.industry = Industry.allCases.first { $0.rawValue == industry.name }
+                }
+                
+                if let role = summary.selectedRole {
+                    onboardingData.roleTitle = role.title
+                    onboardingData.selectedRole = Role(
+                        id: role.id,
+                        title: role.title,
+                        description: role.description,
+                        industry: role.industryName ?? ""
+                    )
+                }
+                
+                // Populate Phase 2 data
+                if !summary.selectedPartners.isEmpty {
+                    // Convert API partners to enum cases
+                    for partner in summary.selectedPartners {
+                        if let partnerEnum = mapIdToPartner(partner.communicationPartner.name) {
+                            onboardingData.selectedConversationPartners.insert(partnerEnum)
+                            selectedPartners.insert(partnerEnum)
+                        }
+                    }
+                }
+                
+                print("✅ [ONBOARDING] Summary data loaded successfully")
+            }
+        } catch {
+            print("❌ [ONBOARDING] Failed to load onboarding summary: \(error)")
+        }
+    }
+    
+    private func mapIdToPartner(_ partnerName: String) -> ConversationPartner? {
+        // Map partner names from backend to enum cases
+        switch partnerName.lowercased() {
+        case "clients":
+            return .clients
+        case "customers":
+            return .customers
+        case "colleagues":
+            return .colleagues
+        case "suppliers":
+            return .suppliers
+        case "partners":
+            return .partners
+        case "senior management":
+            return .seniorManagement
+        case "stakeholders":
+            return .stakeholders
+        default:
+            return nil
+        }
+    }
+    
+    private func loadBasicInfoFromProfile() async {
+        print("📋 [ONBOARDING] Loading basic info from user profile as fallback...")
+        
+        do {
+            let profile = try await authService.getUserProfile()
+            
+            await MainActor.run {
+                // Set language
+                if let languageCode = profile.nativeLanguage {
+                    onboardingData.nativeLanguage = Language.allCases.first { $0.rawValue == languageCode }
+                }
+                
+                // Set industry
+                if let industryName = profile.industry?.name {
+                    onboardingData.industry = Industry.allCases.first { $0.rawValue == industryName }
+                }
+                
+                // Set role
+                if let role = profile.role {
+                    onboardingData.roleTitle = role.title ?? ""
+                    onboardingData.selectedRole = Role(
+                        id: role.id,
+                        title: role.title ?? "",
+                        description: "", // Profile doesn't include description
+                        industry: profile.industry?.name ?? ""
+                    )
+                }
+                
+                print("✅ [ONBOARDING] Basic info loaded from profile")
+            }
+        } catch {
+            print("❌ [ONBOARDING] Failed to load basic info from profile: \(error)")
         }
     }
 }

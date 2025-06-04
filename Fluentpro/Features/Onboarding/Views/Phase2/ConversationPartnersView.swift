@@ -85,7 +85,6 @@ struct PartnerSelectionCard: View {
         case .partners: return "handshake"
         case .seniorManagement: return "person.crop.circle.badge.checkmark"
         case .stakeholders: return "building.2"
-        case .other: return "ellipsis.circle"
         }
     }
     

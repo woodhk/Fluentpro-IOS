@@ -90,7 +90,6 @@ enum ConversationPartner: String, CaseIterable, Identifiable {
     case partners = "Partners"
     case seniorManagement = "Senior Management"
     case stakeholders = "Stakeholders"
-    case other = "Other"
     
     var id: String { rawValue }
 }
